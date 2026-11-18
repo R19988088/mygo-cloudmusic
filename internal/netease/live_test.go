@@ -39,6 +39,21 @@ func TestSongURLEapiLive(t *testing.T) {
 	t.Log(string(b)[:min(400, len(b))])
 }
 
+// TestSongDownloadURLLive checks the fallback that fixes -460 on the
+// player's URL: the client's download link answers with a stream of the
+// same level.
+func TestSongDownloadURLLive(t *testing.T) {
+	if os.Getenv("LIVE") == "" {
+		t.Skip()
+	}
+	deviceOnce.Do(func() { deviceID = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123" })
+	st, err := downloadURL(2652820720, "exhigh")
+	if err != nil || st.URL == "" || st.Size == 0 || st.Type != "mp3" || st.Level == "" {
+		t.Fatalf("download %+v %v", st, err)
+	}
+	t.Logf("%s %d bytes %s", st.Level, st.Size, st.Type)
+}
+
 func TestPrivilegesLive(t *testing.T) {
 	if os.Getenv("LIVE") == "" {
 		t.Skip()
