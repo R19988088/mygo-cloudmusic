@@ -32,6 +32,7 @@ type route struct {
 type app struct {
 	win   *mygo.Window
 	notch *notch
+	tray  *tray
 	art   *artCache
 	pl    *player.Player
 	pal   palette
@@ -202,18 +203,23 @@ func Run() error {
 		if runtime.GOOS == "darwin" {
 			a.notch = newNotch(a)
 		}
+		// Elsewhere the app keeps in the notification area, which brings it
+		// back once its window is closed.
+		if runtime.GOOS != "darwin" {
+			a.tray = startTray(a)
+		}
 		if shotHook != nil {
 			shotHook(a)
 		}
 		// On macOS closing the window hides it: music plays on, under the
-		// notch, and the Dock icon brings it back. Elsewhere nothing would
-		// bring it back, so closing it quits.
+		// notch, and the Dock icon brings it back. Elsewhere the tray does,
+		// so closing hides it too.
 		a.win.OnClose(func(e *mygo.CloseEvent) {
 			if a.quitting {
 				return
 			}
 			e.PreventDefault()
-			if runtime.GOOS == "darwin" {
+			if runtime.GOOS == "darwin" || (a.tray != nil && a.tray.ok) {
 				a.win.Hide()
 			} else {
 				mygo.App.Quit()
@@ -222,6 +228,9 @@ func Run() error {
 	})
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
 		a.quitting = true
+		if a.tray != nil {
+			a.tray.remove()
+		}
 		a.settings.Volume = a.volume
 		a.settings.save()
 		a.saveSession()

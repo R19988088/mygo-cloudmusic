@@ -49,7 +49,10 @@ func (a *app) view(c *ui.Context) {
 				return
 			}
 			side := ui.Column(c).Width(sidebarWidth)
-			if !c.Vibrancy() {
+			// Vibrancy is macOS's: on Windows the material behind it shows
+			// through where the sidebar pads its top as a dark strip, so
+			// the sidebar paints its own color there.
+			if runtime.GOOS != "darwin" || !c.Vibrancy() {
 				side.Background(p.sidebar)
 			}
 			side.Children(func() { a.sidebar(c) })
