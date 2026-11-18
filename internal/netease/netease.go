@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -313,6 +314,10 @@ func Search(query string, limit int) ([]Track, error) {
 
 var ErrUnavailable = errors.New("this song isn't available to stream")
 
+// ErrUnsupportedFormat is a stream NetEase serves in a format the player
+// cannot decode: the M4A, AAC in an MP4, of a cloud upload.
+var ErrUnsupportedFormat = errors.New("unsupported format")
+
 // Stream is where a track streams from, and what it is.
 type Stream struct {
 	URL  string `json:"-"`
@@ -356,9 +361,6 @@ func (d *streamURL) stream(level string) (*Stream, error) {
 	}
 	s := d.Stream
 	s.Type = strings.ToLower(s.Type)
-	if s.Type != "" && s.Type != "mp3" && s.Type != "flac" {
-		return nil, fmt.Errorf("unsupported format %s", s.Type)
-	}
 	if d.Peak != nil {
 		s.Peak = *d.Peak
 	}
@@ -369,10 +371,36 @@ func (d *streamURL) stream(level string) (*Stream, error) {
 	return &s, nil
 }
 
+// decodable reports whether the player decodes a stream of type: MP3, or
+// FLAC. NetEase serves some tracks as m4a, AAC in an MP4, which it cannot.
+func decodable(typ string) bool { return typ == "" || typ == "mp3" || typ == "flac" }
+
 // SongURL returns where to stream a track, MP3 or FLAC, at level (one of
 // Levels) or the best below it the listener may play. It goes through
 // the eapi, which carries the session, so VIP songs play for subscribers.
 func SongURL(id int64, level string) (*Stream, error) {
+	st, code, err := playerStream(id, level)
+	if err != nil {
+		return nil, err
+	}
+	// The player's URL answers -460 for a while once NetEase has flagged
+	// the network, at every level: the endpoints below still answer.
+	if code == riskControl {
+		return fallbackStream(id, level, nil)
+	}
+	if st == nil {
+		return nil, ErrUnavailable
+	}
+	if decodable(st.Type) {
+		return st, nil
+	}
+	return fallbackStream(id, level, st)
+}
+
+// playerStream asks the player's URL for a track at level, and returns the
+// stream, the answer's code, and nothing where it has no URL or only a
+// preview.
+func playerStream(id int64, level string) (*Stream, int, error) {
 	var res struct {
 		Code int         `json:"code"`
 		Data []streamURL `json:"data"`
@@ -383,23 +411,62 @@ func SongURL(id int64, level string) (*Stream, error) {
 	}
 	data := map[string]any{"ids": fmt.Sprintf("[%d]", id), "level": level, "encodeType": encode}
 	if err := eapiPost("/api/song/enhance/player/url/v1", data, &res); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	// The player's URL answers -460 for a while once NetEase has flagged
-	// the network, at every level: the download link it serves the client
-	// still plays, at the level asked for, so fall back to it.
 	if res.Code == riskControl || (len(res.Data) > 0 && res.Data[0].Code == riskControl) {
-		return downloadURL(id, level)
+		return nil, riskControl, nil
 	}
 	if len(res.Data) == 0 || res.Data[0].URL == "" {
-		return nil, ErrUnavailable
+		return nil, res.Code, nil
 	}
-	return res.Data[0].stream(level)
+	s, err := res.Data[0].stream(level)
+	if errors.Is(err, ErrUnavailable) {
+		return nil, res.Code, nil
+	}
+	return s, res.Code, err
 }
 
-// downloadURL asks for a track's stream through the client's download link,
-// which still answers while the player's URL is risk controlled.
-func downloadURL(id int64, level string) (*Stream, error) {
+// fallbackStream asks the other endpoints while the player's URL is risk
+// controlled, or serves an m4a the player cannot decode: the client's
+// download link first, then the legacy player endpoint at the bit rates it
+// knows, which serve MP3, then the download link at lower levels. rejected
+// is the stream the player's URL served in a format it cannot play.
+func fallbackStream(id int64, level string, rejected *Stream) (*Stream, error) {
+	unsupported := ""
+	if rejected != nil {
+		unsupported = rejected.Type
+	}
+	if st, err := downloadStream(id, level); err == nil {
+		if decodable(st.Type) {
+			return st, nil
+		}
+		unsupported = st.Type
+	}
+	for _, br := range legacyBRs(level) {
+		if st, err := legacyStream(id, br); err == nil {
+			if decodable(st.Type) {
+				return st, nil
+			}
+			unsupported = st.Type
+		}
+	}
+	for _, lv := range lowerLevels(level) {
+		if st, err := downloadStream(id, lv); err == nil {
+			if decodable(st.Type) {
+				return st, nil
+			}
+			unsupported = st.Type
+		}
+	}
+	if unsupported != "" {
+		return nil, fmt.Errorf("%w: %s", ErrUnsupportedFormat, unsupported)
+	}
+	return nil, ErrUnavailable
+}
+
+// downloadStream asks for a track's stream through the client's download
+// link, which still answers while the player's URL is risk controlled.
+func downloadStream(id int64, level string) (*Stream, error) {
 	var res struct {
 		Code int        `json:"code"`
 		Data *streamURL `json:"data"`
@@ -408,13 +475,53 @@ func downloadURL(id int64, level string) (*Stream, error) {
 	if err := eapiPost("/api/song/enhance/download/url/v1", data, &res); err != nil {
 		return nil, err
 	}
-	if res.Code != 0 && res.Code != 200 {
-		return nil, ErrUnavailable
-	}
-	if res.Data == nil || res.Data.URL == "" {
+	if (res.Code != 0 && res.Code != 200) || res.Data == nil || res.Data.URL == "" {
 		return nil, ErrUnavailable
 	}
 	return res.Data.stream(level)
+}
+
+// legacyStream asks the player endpoint of before -460 for a track at the
+// bit rate br. It knows no lossless: the lossless levels get the best MP3.
+func legacyStream(id int64, br int) (*Stream, error) {
+	var res struct {
+		Code int         `json:"code"`
+		Data []streamURL `json:"data"`
+	}
+	data := map[string]any{"ids": fmt.Sprintf("[%d]", id), "br": br}
+	if err := eapiPost("/api/song/enhance/player/url", data, &res); err != nil {
+		return nil, err
+	}
+	if res.Code == riskControl || len(res.Data) == 0 || res.Data[0].URL == "" {
+		return nil, ErrUnavailable
+	}
+	return res.Data[0].stream("")
+}
+
+// legacyBRs are the bit rates the legacy endpoint serves for level, the
+// highest first.
+func legacyBRs(level string) []int {
+	switch level {
+	case "standard":
+		return []int{128000}
+	case "higher":
+		return []int{192000, 128000}
+	default:
+		return []int{320000, 192000, 128000}
+	}
+}
+
+// lowerLevels are the levels below level, the nearest first.
+func lowerLevels(level string) []string {
+	at := slices.Index(Levels, level)
+	if at < 0 {
+		return nil
+	}
+	out := make([]string, at)
+	for i := range out {
+		out[i] = Levels[at-1-i]
+	}
+	return out
 }
 
 // Lyrics returns a track's timed lyrics, their translation if any, and

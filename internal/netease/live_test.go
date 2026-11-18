@@ -47,7 +47,7 @@ func TestSongDownloadURLLive(t *testing.T) {
 		t.Skip()
 	}
 	deviceOnce.Do(func() { deviceID = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123" })
-	st, err := downloadURL(2652820720, "exhigh")
+	st, err := downloadStream(2652820720, "exhigh")
 	if err != nil || st.URL == "" || st.Size == 0 || st.Type != "mp3" || st.Level == "" {
 		t.Fatalf("download %+v %v", st, err)
 	}
