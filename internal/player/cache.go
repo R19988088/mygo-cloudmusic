@@ -14,9 +14,9 @@ import (
 )
 
 // Cache keeps the songs played on disk, so that they play again at once,
-// and without the network: each as <id>-<level>.mp3 or .flac, with what
-// its stream was beside it in <id>-<level>.json. Once they take more than
-// the limit, those played longest ago go first.
+// and without the network: each as <id>-<level>.mp3, .flac or .m4a, with
+// what its stream was beside it in <id>-<level>.json. Once they take more
+// than the limit, those played longest ago go first.
 type Cache struct {
 	dir string
 
@@ -162,7 +162,7 @@ func (c *Cache) songs() []cachedSong {
 	var out []cachedSong
 	for _, e := range entries {
 		ext := filepath.Ext(e.Name())
-		if ext != ".mp3" && ext != ".flac" {
+		if ext != ".mp3" && ext != ".flac" && ext != ".m4a" {
 			continue
 		}
 		info, err := e.Info()

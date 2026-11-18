@@ -229,6 +229,22 @@ func (d *download) waitFor(n int64) int64 {
 	return d.n
 }
 
+// waitAll waits for the song to have all come in, or its download to fail.
+func (d *download) waitAll() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for !d.done {
+		d.cond.Wait()
+	}
+	if d.err != nil {
+		return d.err
+	}
+	if d.size > 0 && d.n < d.size {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+
 // readAt reads into b what is in from off, as much as fits. Its caller
 // holds the lock.
 func (d *download) readAt(b []byte, off int64) (int, error) {
@@ -297,7 +313,8 @@ func (r *downloadReader) Read(p []byte) (int, error) {
 }
 
 // A stream decodes a download for package audio, and measures the
-// spectrum of what it decodes, for the visualizers: an MP3's or a FLAC's.
+// spectrum of what it decodes, for the visualizers: an MP3's, a FLAC's or
+// the M4A of a cloud upload.
 type stream interface {
 	audio.Decoder
 	Close() error
@@ -305,9 +322,15 @@ type stream interface {
 	source() (*download, *spectrum)
 }
 
-// openStream opens the song dl fetches, MP3 or FLAC, as its first bytes
-// say. An MP3 says nothing of its length: durationMs is it.
+// openStream opens the song dl fetches, MP3, FLAC or the M4A of a cloud
+// upload, as its first bytes say. An MP3 says nothing of its length:
+// durationMs is it.
 func openStream(dl *download, durationMs int64) (stream, error) {
+	if dl.waitFor(12) >= 8 {
+		if b := dl.peek(0, 12); len(b) >= 8 && string(b[4:8]) == "ftyp" {
+			return openM4AStream(dl)
+		}
+	}
 	off := id3Size(dl)
 	if dl.waitFor(off+4) >= off+4 && string(dl.peek(off, 4)) == "fLaC" {
 		return openFLACStream(dl)

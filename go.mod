@@ -9,6 +9,7 @@ require (
 	github.com/egoist/mygo v0.6.5-0.20261025230045-be164835449b
 	github.com/hajimehoshi/go-mp3 v0.3.4
 	github.com/mewkiz/flac v1.0.14
+	github.com/tphakala/go-aac v0.7.2
 	golang.org/x/image v0.46.0
 	rsc.io/qr v0.2.0
 )
@@ -18,6 +19,8 @@ require (
 	github.com/icza/bitio v1.1.0 // indirect
 	github.com/mewkiz/pkg v0.0.0-20250417130911-3f050ff8c56d // indirect
 	github.com/mewpkg/term v0.0.0-20241026122259-37a80af23985 // indirect
+	github.com/tphakala/simd v1.15.0 // indirect
 	golang.org/x/net v0.59.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 )

@@ -621,7 +621,7 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 				case err == netease.ErrUnavailable:
 					p.err = "这首歌需要 VIP 才能播放"
 				case errors.Is(err, netease.ErrUnsupportedFormat):
-					p.err = "这首歌是 M4A/AAC 文件，播放器暂不支持"
+					p.err = "这首歌的 AAC 编码暂不支持（HE-AAC）"
 				}
 				// Skip what cannot play, unless nothing in the queue can.
 				if skipped+1 < len(p.order) {

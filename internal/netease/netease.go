@@ -373,11 +373,14 @@ func (d *streamURL) stream(level string) (*Stream, error) {
 
 // decodable reports whether the player decodes a stream of type: MP3, or
 // FLAC. NetEase serves some tracks as m4a, AAC in an MP4, which it cannot.
-func decodable(typ string) bool { return typ == "" || typ == "mp3" || typ == "flac" }
+func decodable(typ string) bool {
+	return typ == "" || typ == "mp3" || typ == "flac" || typ == "m4a"
+}
 
-// SongURL returns where to stream a track, MP3 or FLAC, at level (one of
-// Levels) or the best below it the listener may play. It goes through
-// the eapi, which carries the session, so VIP songs play for subscribers.
+// SongURL returns where to stream a track, MP3, FLAC or the M4A of a cloud
+// upload, at level (one of Levels) or the best below it the listener may
+// play. It goes through the eapi, which carries the session, so VIP songs
+// play for subscribers.
 func SongURL(id int64, level string) (*Stream, error) {
 	st, code, err := playerStream(id, level)
 	if err != nil {
