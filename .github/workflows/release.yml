@@ -1,8 +1,9 @@
-# Builds the green apps users unzip and run: macOS on Apple silicon and
-# Intel, Windows on x64 and ARM64. No disk images, no signing, and the
-# Windows archives leave out the installer, so the workflow needs none of
-# the release secrets. Pushing a tag also puts the archives in a release
-# of the tag; a manual run keeps them as artifacts of the run.
+# Builds the green apps users unzip and run, one artifact per platform and
+# architecture: macOS on Apple silicon and Intel, Windows on x64 and ARM64. No
+# disk images, no signing beyond ad hoc, and the Windows archives leave out the
+# installer, so the workflow needs none of the release secrets. Pushing a tag
+# also puts the four archives in a release of the tag; a manual run keeps
+# them as artifacts of the run.
 name: Build
 
 on:
@@ -15,8 +16,12 @@ permissions:
 
 jobs:
   macos:
-    name: macOS
+    name: macOS ${{ matrix.arch }}
     runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, amd64]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -24,23 +29,25 @@ jobs:
           go-version-file: go.mod
       # Ad hoc signing (-sign -): Apple silicon runs no unsigned code, and
       # notarization would need the Apple ID the release secrets hold.
-      - name: Build the apps
-        run: go tool mygo build -platform "darwin/arm64,darwin/amd64" -skip-dmg -skip-notarize -sign -
-      - name: Zip them
+      - name: Build the app
+        run: go tool mygo build -platform "darwin/${{ matrix.arch }}" -skip-dmg -skip-notarize -sign -
+      - name: Zip it
         run: |
           version=$(python3 -c 'import json; print(json.load(open("mygo.json"))["version"])')
-          for arch in arm64 amd64; do
-            ditto -c -k --sequesterRsrc --keepParent "build/darwin-$arch/MyGo 云音乐.app" \
-              "build/MyGo-CloudMusic-$version-macos-$arch.zip"
-          done
+          ditto -c -k --sequesterRsrc --keepParent "build/darwin-${{ matrix.arch }}/MyGo 云音乐.app" \
+            "build/MyGo-CloudMusic-$version-macos-${{ matrix.arch }}.zip"
       - uses: actions/upload-artifact@v4
         with:
-          name: macos
+          name: MyGo-CloudMusic-macos-${{ matrix.arch }}
           path: build/*.zip
 
   windows:
-    name: Windows
+    name: Windows ${{ matrix.arch }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -48,18 +55,16 @@ jobs:
           go-version-file: go.mod
       # The installer the build makes beside the app's files is no part of
       # the green version, and the archive leaves it out.
-      - name: Build the apps
-        run: go tool mygo build -platform "windows/amd64,windows/arm64"
-      - name: Zip them
+      - name: Build the app
+        run: go tool mygo build -platform "windows/${{ matrix.arch }}"
+      - name: Zip it
         run: |
           version=$(python3 -c 'import json; print(json.load(open("mygo.json"))["version"])')
-          for arch in amd64 arm64; do
-            (cd "build/windows-$arch" && zip -qr "../MyGo-CloudMusic-$version-windows-$arch-portable.zip" . \
-              -x '*-setup-*.exe' -x 'install.ps1')
-          done
+          (cd "build/windows-${{ matrix.arch }}" && zip -qr "../MyGo-CloudMusic-$version-windows-${{ matrix.arch }}-portable.zip" . \
+            -x '*-setup-*.exe' -x 'install.ps1')
       - uses: actions/upload-artifact@v4
         with:
-          name: windows
+          name: MyGo-CloudMusic-windows-${{ matrix.arch }}
           path: build/*.zip
 
   release:
