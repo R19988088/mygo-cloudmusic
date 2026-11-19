@@ -109,6 +109,7 @@ func (a *app) open(r route) {
 func (a *app) show(r route) {
 	a.route = r
 	a.trackList, a.pageScroll = ui.ListState{}, ui.ScrollState{}
+	a.noteRoute(r)
 	if r.page == pagePlaylist {
 		a.loadPlaylist(r.playlist, false)
 	}
@@ -333,7 +334,62 @@ func (a *app) mineItem(c *ui.Context, icon *ui.SVG, label string, kind mineKind)
 		ui.Text(c, label).FontSize(13).FontWeight(500).TextColor(p.text)
 	})
 	if b.Clicked() {
-		a.mineShown, a.mineOn = kind, true
+		a.chooseMine(kind)
+	}
+}
+
+// chooseMine shows the column of the list kind beside the categories, and
+// the page of what that list last showed, or, when it shows none, a page
+// that says which one to pick: choosing 播客 from the page of 私人 FM opens
+// the podcasts, not the FM it was on.
+func (a *app) chooseMine(kind mineKind) {
+	a.mineShown, a.mineOn = kind, true
+	if r, ok := a.mineRoute(kind); ok {
+		a.open(r)
+		return
+	}
+	// Nothing of it chosen yet: the third level says which one to choose.
+	if a.route.page != pagePick {
+		a.open(route{page: pagePick})
+	}
+}
+
+// mineRoute returns the page of what the list of kind last showed.
+func (a *app) mineRoute(kind mineKind) (route, bool) {
+	id := a.mineAt[kind]
+	if id == 0 {
+		return route{}, false
+	}
+	switch kind {
+	case mineAlbums:
+		return route{page: pageAlbum, album: id}, true
+	case minePodcasts:
+		return route{page: pagePodcast, podcast: id}, true
+	}
+	return route{page: pagePlaylist, playlist: id}, true
+}
+
+// noteMine remembers what the list of kind last showed, which choosing it
+// again opens.
+func (a *app) noteMine(kind mineKind, id int64) {
+	if a.mineAt == nil {
+		a.mineAt = map[mineKind]int64{}
+	}
+	a.mineAt[kind] = id
+}
+
+// noteRoute remembers the page shown as what its list of 我的 shows, so
+// choosing that list opens it again.
+func (a *app) noteRoute(r route) {
+	switch r.page {
+	case pageAlbum:
+		a.noteMine(mineAlbums, r.album)
+	case pagePodcast:
+		a.noteMine(minePodcasts, r.podcast)
+	case pagePlaylist:
+		if kind, ok := a.routeMine(r); ok {
+			a.noteMine(kind, r.playlist)
+		}
 	}
 }
 
@@ -349,6 +405,12 @@ func (a *app) mineList(c *ui.Context) {
 	default:
 		a.playlistList(c, "我的歌单", a.mine, true, "登录后，你的歌单显示在这里")
 	}
+}
+
+// pickPage is the third level before one of a list of 我的 is chosen: it
+// names the list beside the categories, which holds what to choose from.
+func (a *app) pickPage(c *ui.Context) {
+	a.centered(c, "在「"+a.mineShown.title()+"」里"+a.mineShown.pick(), nil)
 }
 
 func (a *app) navItem(c *ui.Context, icon *ui.SVG, label string, r route) {
@@ -422,6 +484,7 @@ func (a *app) restoreSide() {
 		return
 	}
 	a.mineShown, a.mineOn = kind, true
+	a.noteMine(kind, a.settings.SidePlaylist)
 	if kind == mineAlbums {
 		a.route = route{page: pageAlbum, album: a.settings.SidePlaylist}
 		return
@@ -483,6 +546,31 @@ func (k mineKind) setting() string {
 		return "albums"
 	}
 	return "playlists"
+}
+
+// title names the list of 我的, as its column heads it.
+func (k mineKind) title() string {
+	switch k {
+	case mineSaved:
+		return "收藏的歌单"
+	case minePodcasts:
+		return "收藏的播客"
+	case mineAlbums:
+		return "收藏的专辑"
+	}
+	return "我的歌单"
+}
+
+// pick says what choosing from the list of 我的 is, for the page before one
+// of its entries is chosen.
+func (k mineKind) pick() string {
+	switch k {
+	case mineAlbums:
+		return "选一张专辑"
+	case minePodcasts:
+		return "选一个播客"
+	}
+	return "选一个歌单"
 }
 
 // sidebarNowPlaying is the card at the foot of the categories: the cover of
@@ -618,6 +706,8 @@ func (a *app) content(c *ui.Context) {
 		a.albumPage(c)
 	case pagePodcast:
 		a.podcastPage(c)
+	case pagePick:
+		a.pickPage(c)
 	case pageSearch:
 		a.searchPage(c)
 	case pageFM:

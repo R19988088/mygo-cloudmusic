@@ -22,6 +22,9 @@ const (
 	pagePodcast
 	pageSearch
 	pageFM
+	// pagePick is the third level of a list of 我的 before anything in it is
+	// chosen: the column beside the categories lists what to choose from.
+	pagePick
 )
 
 type route struct {
@@ -69,13 +72,17 @@ type app struct {
 	mineClosed bool
 	mineShown  mineKind
 	mineOn     bool
-	plW        float32        // how wide that column is, as it last laid out
-	sizeDue    bool           // the window's size is written soon
-	naming     nameDialog     // the name of a playlist asked for
-	deleting   deleteDialog   // whether to delete a playlist, asked
-	liked      map[int64]bool // the songs the listener likes
-	toast      string         // a message to show once
-	picked     pickedUp       // the song a login picked up, waiting to play
+	// mineAt is what each list of 我的 last showed: choosing that list beside
+	// the categories opens its page again, or says which one to pick when it
+	// shows none.
+	mineAt   map[mineKind]int64
+	plW      float32        // how wide that column is, as it last laid out
+	sizeDue  bool           // the window's size is written soon
+	naming   nameDialog     // the name of a playlist asked for
+	deleting deleteDialog   // whether to delete a playlist, asked
+	liked    map[int64]bool // the songs the listener likes
+	toast    string         // a message to show once
+	picked   pickedUp       // the song a login picked up, waiting to play
 
 	daily       []netease.Track
 	dailySpin   spinState // the record on the daily card

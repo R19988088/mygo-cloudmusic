@@ -144,8 +144,9 @@ func init() {
 				return
 			}
 			if os.Getenv("NM_SCENE") == "pod" {
-				// The column of podcasts, and the page of the first one, with
-				// the covers NetEase serves.
+				// The podcasts' column chosen from the page of 私人 FM, with
+				// the covers NetEase serves: the third level first says which
+				// to pick, and then shows the one picked.
 				for range 60 {
 					var n int
 					mygo.RunOnMain(func() { n = len(a.podcasts) })
@@ -154,8 +155,12 @@ func init() {
 					}
 					time.Sleep(250 * time.Millisecond)
 				}
+				step(0, func() { a.open(route{page: pageFM}) })
+				time.Sleep(time.Second)
+				step(0, func() { a.chooseMine(minePodcasts) })
+				time.Sleep(1500 * time.Millisecond)
+				shot("podcasts-pick", a.win)
 				step(0, func() {
-					a.mineShown, a.mineOn = minePodcasts, true
 					if len(a.podcasts) > 0 {
 						a.open(route{page: pagePodcast, podcast: a.podcasts[0].ID})
 					}

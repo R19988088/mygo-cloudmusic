@@ -561,6 +561,87 @@ func TestPodcastsListAndOpen(t *testing.T) {
 	}
 }
 
+// Choosing one of 我的 from another page opens its column and what that list
+// last showed, not the page the app was on: 播客 from 私人 FM shows the
+// podcast that was open, and a list that showed nothing says which of its
+// entries to pick.
+func TestMineOpensItsPage(t *testing.T) {
+	a := editTestApp()
+	a.route = route{page: pageHome}
+	a.mineOn = false
+	a.homeLoading = true
+	tt := ui.NewTester(a.view, 1200, 800)
+	tt.Frame()
+	if err := tt.Click("播客"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(300 * time.Millisecond)
+	tt.Frame()
+	// Nothing of the podcasts was open yet: the third level says which to pick.
+	if a.route.page != pagePick {
+		t.Fatalf("choosing 播客 first went to %+v", a.route)
+	}
+	if !tt.HasText("在「收藏的播客」里选一个播客") {
+		t.Error("the page before a podcast is picked does not say which to pick")
+	}
+	if err := tt.Click("代码时间"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.route.page != pagePodcast || a.route.podcast != 40 {
+		t.Fatalf("opening the podcast went to %+v", a.route)
+	}
+	if err := tt.Click("私人 FM"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.route.page != pageFM || a.mineOn {
+		t.Fatalf("opening 私人 FM went to %+v", a.route)
+	}
+	if err := tt.Click("播客"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(300 * time.Millisecond)
+	tt.Frame()
+	if a.route.page != pagePodcast || a.route.podcast != 40 {
+		t.Errorf("choosing 播客 from 私人 FM went to %+v, want the podcast opened", a.route)
+	}
+	if !a.mineOn || a.mineShown != minePodcasts {
+		t.Errorf("the column shows %v, %v, want 播客", a.mineShown, a.mineOn)
+	}
+	// 专辑 shows none yet: its page says which to pick, not the podcast.
+	if err := tt.Click("专辑"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(300 * time.Millisecond)
+	tt.Frame()
+	if a.route.page != pagePick {
+		t.Fatalf("choosing 专辑 went to %+v", a.route)
+	}
+	if !tt.HasText("在「收藏的专辑」里选一张专辑") {
+		t.Error("the page before an album is picked does not say which to pick")
+	}
+	// Choosing it again opens the album the column lists.
+	if err := tt.Click("すずか"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.route.page != pageAlbum || a.route.album != 30 {
+		t.Fatalf("opening the album went to %+v", a.route)
+	}
+	if err := tt.Click("收藏"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(300 * time.Millisecond)
+	tt.Frame()
+	if a.route.page == pageAlbum {
+		t.Error("choosing 收藏 left the album page showing")
+	}
+	if _, ok := tt.Find("飙升榜"); !ok {
+		t.Error("收藏 does not list the saved playlists")
+	}
+}
+
 // With NM_FRAMES set, saves the column of podcasts beside the categories and
 // the page of one, to look at.
 func TestPodcastFrames(t *testing.T) {
