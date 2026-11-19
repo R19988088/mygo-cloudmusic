@@ -19,3 +19,71 @@
 14:37:21.196 [12412] clean http source:0!
 14:37:21.200 [12412] create http  source:0!
 14:38:01.175 [27768] ] Running without renderer sandbox
+14:38:58.192 [9568] GetFileAttributes C:\Users\
+14:41:28.357 [12412] ] "_wapm_upload success", source: https://st.music.163.com/desktopapmsdk/desktopApmSdk-0.0.11.js (1)
+14:43:55.620 [25864] ] Running without renderer sandbox
+14:47:01.118 [12412] clean http source:0!
+14:47:01.121 [12412] create http  source:0!
+14:48:30.727 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\d992fd19-0b25-4fac-887a-df212aeb2169:
+14:48:30.728 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\2fbb054b-dec7-479c-9563-0f75b39f2960:
+14:48:30.728 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\9b458fe2-16c9-47b9-b30c-990427634f8d:
+14:48:30.728 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\07a6f8e4-2ec1-4b18-b421-7ed1a12b1b4e:
+14:48:30.728 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\8f8c9fa2-1cb9-48b3-9f73-2c180e047416:
+14:48:30.728 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\e99da2a2-7c12-4223-a691-afc4af146da1:
+14:48:30.728 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\b4bf4a1d-7c41-4cf7-b414-c29b36dfc441:
+14:48:30.729 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\ad0d584e-aac8-45e1-b46f-2ab21fc13a24:
+14:50:48.173 [12412] clean http source:0!
+14:50:48.177 [12412] create http  source:0!
+14:51:50.128 [28204] ] Running without renderer sandbox
+14:52:41.072 [12412] clean http source:0!
+14:52:41.817 [27952] ] Running without renderer sandbox
+14:53:58.196 [9568] GetFileAttributes C:\Users\
+14:56:54.250 [12412] create http  source:0!
+14:58:20.814 [12912] upload LagMonitor ok
+14:58:52.293 [6636] :crashpad-handler] [agent_infra] crash dump scan completed, pending_count=0
+15:00:43.880 [12412] clean http source:0!
+15:00:43.885 [12412] create http  source:0!
+15:02:16.940 [20536] ] Running without renderer sandbox
+15:03:30.740 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\d992fd19-0b25-4fac-887a-df212aeb2169:
+15:03:30.740 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\2fbb054b-dec7-479c-9563-0f75b39f2960:
+15:03:30.740 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\9b458fe2-16c9-47b9-b30c-990427634f8d:
+15:03:30.740 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\07a6f8e4-2ec1-4b18-b421-7ed1a12b1b4e:
+15:03:30.740 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\8f8c9fa2-1cb9-48b3-9f73-2c180e047416:
+15:03:30.740 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\e99da2a2-7c12-4223-a691-afc4af146da1:
+15:03:30.740 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\b4bf4a1d-7c41-4cf7-b414-c29b36dfc441:
+15:03:30.740 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\ad0d584e-aac8-45e1-b46f-2ab21fc13a24:
+15:05:07.070 [12412] clean http source:0!
+15:05:07.074 [12412] create http  source:0!
+15:08:58.212 [9568] GetFileAttributes C:\Users\
+15:09:46.994 [12412] clean http source:0!
+15:09:46.997 [12412] create http  source:0!
+15:10:09.602 [18132] ] Running without renderer sandbox
+15:15:52.480 [12412] clean http source:0!
+15:15:52.483 [12412] create http  source:0!
+15:17:07.673 [24452] ] Running without renderer sandbox
+15:18:24.766 [22376] 
+15:18:24.766 [22376] graphics-hook.dll loaded against process: photocraft.exe
+15:18:24.766 [22376] 
+15:18:24.766 [22376] everything..  seems to be in order
+15:18:30.746 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\d992fd19-0b25-4fac-887a-df212aeb2169:
+15:18:30.747 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\2fbb054b-dec7-479c-9563-0f75b39f2960:
+15:18:30.747 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\9b458fe2-16c9-47b9-b30c-990427634f8d:
+15:18:30.747 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\07a6f8e4-2ec1-4b18-b421-7ed1a12b1b4e:
+15:18:30.748 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\8f8c9fa2-1cb9-48b3-9f73-2c180e047416:
+15:18:30.748 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\e99da2a2-7c12-4223-a691-afc4af146da1:
+15:18:30.748 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\b4bf4a1d-7c41-4cf7-b414-c29b36dfc441:
+15:18:30.748 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\ad0d584e-aac8-45e1-b46f-2ab21fc13a24:
+15:19:14.886 [12412] clean http source:0!
+15:19:14.889 [12412] create http  source:0!
+15:22:37.111 [12412] clean http source:0!
+15:23:58.216 [9568] GetFileAttributes C:\Users\
+15:28:20.830 [12912] upload LagMonitor ok
+15:33:30.748 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\d992fd19-0b25-4fac-887a-df212aeb2169:
+15:33:30.748 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\2fbb054b-dec7-479c-9563-0f75b39f2960:
+15:33:30.749 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\9b458fe2-16c9-47b9-b30c-990427634f8d:
+15:33:30.749 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\07a6f8e4-2ec1-4b18-b421-7ed1a12b1b4e:
+15:33:30.749 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\8f8c9fa2-1cb9-48b3-9f73-2c180e047416:
+15:33:30.749 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\e99da2a2-7c12-4223-a691-afc4af146da1:
+15:33:30.750 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\b4bf4a1d-7c41-4cf7-b414-c29b36dfc441:
+15:33:30.750 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\ad0d584e-aac8-45e1-b46f-2ab21fc13a24:
+15:38:58.231 [9568] GetFileAttributes C:\Users\
