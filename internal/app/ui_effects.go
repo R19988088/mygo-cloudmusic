@@ -70,6 +70,10 @@ func (a *app) effectsButton(c *ui.Context, color ui.Color) {
 				a.effectsCell(c, name)
 			}
 		})
+		// The ones the client changes by convolution alone are a dot: the
+		// desktop client's own sound, which we have no coefficients for.
+		ui.Text(c, "· 的预设靠卷积音色变化，暂未复现，选它声音不变").
+			FontSize(11).TextColor(a.pal.muted).SingleLine()
 	})
 }
 
@@ -77,10 +81,19 @@ func (a *app) effectsButton(c *ui.Context, color ui.Color) {
 // accent, the others only show it under the pointer, and all of them fade
 // while the effects are off.
 func (a *app) effectsCell(c *ui.Context, name string) {
+	// A preset we have the parameters of; the others change the client's
+	// sound through convolution, which leaves them their name alone.
+	label := name
+	if effectPreset(name) == nil {
+		label += "·"
+	}
 	cell := ui.ButtonBase(c.Key("fx-" + name)).Height(30).PaddingX(8).Radius(8).Center().Label(name)
 	on := a.settings.EffectsOn
 	sel := a.settings.Effect == name
 	fill, fg := ui.Transparent, a.pal.text
+	if effectPreset(name) == nil {
+		fg = a.pal.muted
+	}
 	if !on && !sel {
 		fg = a.pal.faint
 	}
@@ -98,7 +111,7 @@ func (a *app) effectsCell(c *ui.Context, name string) {
 		pose.Scale = 0.97
 	}
 	cell.AnimatePose(pose, ui.Snappy)
-	cell.Children(func() { ui.Text(c, name).FontSize(12).FontWeight(600).TextColor(fg).SingleLine() })
+	cell.Children(func() { ui.Text(c, label).FontSize(12).FontWeight(600).TextColor(fg).SingleLine() })
 	// Picking a preset turns the effects on, as the client does: one that
 	// leaves them off would take the click and change nothing.
 	if cell.Clicked() {

@@ -159,8 +159,9 @@ func (a *app) sidebar(c *ui.Context) {
 	nav := ui.Column(c).Width(navWidth).DragWindow()
 	// Vibrancy is macOS's: on Windows the material behind it shows through
 	// where the column pads its top as a dark strip, so it paints its own
-	// color there.
-	if runtime.GOOS != "darwin" || !c.Vibrancy() {
+	// color there. A color of the listener's paints over the material, as on
+	// the other platforms: there is nothing to see through it to.
+	if runtime.GOOS != "darwin" || !c.Vibrancy() || p.nav.bgSet {
 		nav.Background(p.sidebar)
 	}
 	nav.Children(func() { a.navColumn(c) })
@@ -267,7 +268,7 @@ func (a *app) playlistColumn(c *ui.Context) {
 	w = min(max(w, 0), playlistWidth)
 	a.plW = w
 	col.Width(w)
-	if runtime.GOOS != "darwin" || !c.Vibrancy() {
+	if runtime.GOOS != "darwin" || !c.Vibrancy() || p.pl.bgSet {
 		// The listener's color for it, or else one a little lighter than the
 		// categories beside it, as the playlists of Music are.
 		col.Background(p.plBg())
