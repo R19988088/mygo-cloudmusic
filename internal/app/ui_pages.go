@@ -411,9 +411,10 @@ func (a *app) trackRows(c *ui.Context, tracks []netease.Track, covers bool, head
 					}
 				})
 			})
-			// The page of an album lists its songs: their album's name, the
-			// same in every row, would only repeat the page's.
-			if wide && a.route.page != pageAlbum {
+			// The page of an album, or of a podcast, lists its own: their
+			// album's name, the same in every row, would only repeat the
+			// page's.
+			if wide && a.route.page != pageAlbum && a.route.page != pagePodcast {
 				ui.Text(c, tr.Album.Name).Grow(2).Basis(0).MinWidth(0).FontSize(12.5).TextColor(p.muted).SingleLine()
 			}
 			// A liked song's heart shows; the others' as the pointer is on them.

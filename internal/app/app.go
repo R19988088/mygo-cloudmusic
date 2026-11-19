@@ -19,6 +19,7 @@ const (
 	pageCharts
 	pagePlaylist
 	pageAlbum
+	pagePodcast
 	pageSearch
 	pageFM
 )
@@ -27,6 +28,7 @@ type route struct {
 	page     pageKind
 	playlist int64
 	album    int64
+	podcast  int64
 }
 
 // mineKind is a list of the sidebar's 我的 section, which the column of
@@ -90,7 +92,20 @@ type app struct {
 	albumSongs map[int64]*netease.AlbumSongs
 	loadingAl  map[int64]bool
 	alErr      map[int64]string
-	trackList  ui.ListState
+	// The podcasts opened here, listed beside the categories before a
+	// search, the ones a search found, and the podcast whose page shows with
+	// its programs.
+	podcasts         []netease.Podcast
+	found            []netease.Podcast
+	podcastQuery     string
+	podcastBox       ui.Handle
+	podcastSearching bool
+	podcastErr       string
+	podcastInfo      map[int64]*netease.Podcast
+	podcastPrograms  map[int64][]netease.PodcastProgram
+	loadingPod       map[int64]bool
+	podErr           map[int64]string
+	trackList        ui.ListState
 	// Where the page, the sidebar's categories and its playlists are
 	// scrolled, kept while Now Playing covers them, unbuilt.
 	pageScroll ui.ScrollState
@@ -184,12 +199,15 @@ func (a *app) showMain() {
 // Run runs the app until it quits.
 func Run() error {
 	a := &app{
-		playlists: map[int64]*netease.Playlist{},
-		loadingPl: map[int64]bool{},
-		plErr:     map[int64]string{},
-		lyricAt:   -1,
-		queueAt:   -1,
-		cacheUsed: -1,
+		playlists:   map[int64]*netease.Playlist{},
+		loadingPl:   map[int64]bool{},
+		plErr:       map[int64]string{},
+		podcastInfo: map[int64]*netease.Podcast{},
+		loadingPod:  map[int64]bool{},
+		podErr:      map[int64]string{},
+		lyricAt:     -1,
+		queueAt:     -1,
+		cacheUsed:   -1,
 	}
 	moveOldData()
 	a.useUpdater()

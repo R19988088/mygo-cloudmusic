@@ -38,6 +38,16 @@ func editTestApp() *app {
 		{ID: 1, Name: "一张相片", Artists: []netease.Artist{{Name: "林宥嘉"}}, Duration: 200000},
 		{ID: 2, Name: "宝船", Artists: []netease.Artist{{Name: "DOUDOU"}}, Duration: 200000},
 	}}
+	// A podcast opened here before, with one program: NetEase serves no list
+	// of what the listener follows, so the column lists the app's own.
+	pc := &netease.Podcast{ID: 40, Name: "代码时间", Category: "知识"}
+	pc.DJ.Nickname = "Robin"
+	a.podcasts = []netease.Podcast{*pc}
+	a.podcastInfo = map[int64]*netease.Podcast{40: pc}
+	a.podcastPrograms = map[int64][]netease.PodcastProgram{40: {
+		{ID: 400, Name: "第一期", Duration: 300000, MainSong: netease.Track{ID: 401, Name: "第一期", Duration: 300000}},
+	}}
+	a.settings.Podcasts = []int64{40}
 	a.route = route{page: pagePlaylist, playlist: 10}
 	// 歌单 is chosen, which shows the sidebar's column of playlists.
 	a.mineOn = true
@@ -260,8 +270,8 @@ func TestDeletePlaylist(t *testing.T) {
 }
 
 // Choosing 收藏 under 我的 lists the saved playlists in the column of
-// playlists instead of the listener's own, and 播客, which has no list yet,
-// says so. Closing 我的 hides its entries.
+// playlists instead of the listener's own, and 播客, lists the podcasts
+// opened here. Closing 我的 hides its entries.
 func TestMineSectionSwitchesTheColumn(t *testing.T) {
 	a := editTestApp()
 	a.homeLoading = true
@@ -284,9 +294,13 @@ func TestMineSectionSwitchesTheColumn(t *testing.T) {
 	if err := tt.Click("播客"); err != nil {
 		t.Fatal(err)
 	}
+	tt.Advance(300 * time.Millisecond)
 	tt.Frame()
-	if !tt.HasText("播客还没有接入") {
-		t.Error("播客 does not say it has no list")
+	if _, ok := tt.Find("代码时间"); !ok {
+		t.Error("播客 does not list the podcasts opened here")
+	}
+	if _, ok := tt.Find("飙升榜"); ok {
+		t.Error("播客 still lists the saved playlists")
 	}
 	if err := tt.Click("我的"); err != nil {
 		t.Fatal(err)
@@ -487,6 +501,87 @@ func TestAlbumFrames(t *testing.T) {
 		tt.Advance(400 * time.Millisecond)
 		tt.Frame()
 		f, _ := os.Create(filepath.Join(dir, "album"+suffix+".png"))
+		png.Encode(f, tt.Image())
+		f.Close()
+	}
+}
+
+// Choosing 播客 lists the podcasts opened here, and one opens its page: who
+// hosts it over its programs. Playing an episode remembers 播客, so the next
+// launch opens the podcast beside the column.
+func TestPodcastsListAndOpen(t *testing.T) {
+	a := editTestApp()
+	a.homeLoading = true
+	a.route = route{page: pageHome}
+	tt := ui.NewTester(a.view, 1200, 800)
+	tt.Frame()
+	if _, ok := tt.Find("代码时间"); ok {
+		t.Fatal("a podcast shows before 播客 is chosen")
+	}
+	if err := tt.Click("播客"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(300 * time.Millisecond)
+	tt.Frame()
+	if _, ok := tt.Find("代码时间"); !ok {
+		t.Fatalf("播客 does not list the podcasts opened here")
+	}
+	if _, ok := tt.Find("通勤"); ok {
+		t.Error("播客 still lists the listener's playlists")
+	}
+	if err := tt.Click("代码时间"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.route.page != pagePodcast || a.route.podcast != 40 {
+		t.Fatalf("opening the podcast went to %+v", a.route)
+	}
+	if !tt.HasText("Robin") {
+		t.Error("the podcast page does not show who hosts it")
+	}
+	if err := tt.Click("第一期"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if cur := a.pl.Current(); cur == nil || cur.ID != 401 {
+		t.Errorf("playing the episode queued %v, want 401", cur)
+	}
+	if a.settings.SideMine != "podcasts" || a.settings.SidePlaylist != 40 {
+		t.Errorf("playing from podcast 40 remembers %q %d", a.settings.SideMine, a.settings.SidePlaylist)
+	}
+
+	into := editTestApp()
+	into.settings = settings{SideMine: "podcasts", SidePlaylist: 40}
+	into.route = route{page: pageHome}
+	into.restoreSide()
+	if !into.mineOn || into.mineShown != minePodcasts {
+		t.Errorf("the column opens on %v, %v, want 播客", into.mineShown, into.mineOn)
+	}
+	if into.route.page != pagePodcast || into.route.podcast != 40 {
+		t.Errorf("the app opens on %+v, want podcast 40", into.route)
+	}
+}
+
+// With NM_FRAMES set, saves the column of podcasts beside the categories and
+// the page of one, to look at.
+func TestPodcastFrames(t *testing.T) {
+	dir := os.Getenv("NM_FRAMES")
+	if dir == "" {
+		t.Skip()
+	}
+	a := editTestApp()
+	a.route = route{page: pagePodcast, podcast: 40}
+	a.mineShown, a.mineOn = minePodcasts, true
+	tt := ui.NewTester(a.view, 1200, 800)
+	for _, dark := range []bool{false, true} {
+		suffix := "-light"
+		if dark {
+			suffix = "-dark"
+		}
+		tt.SetDark(dark)
+		tt.Advance(400 * time.Millisecond)
+		tt.Frame()
+		f, _ := os.Create(filepath.Join(dir, "podcast"+suffix+".png"))
 		png.Encode(f, tt.Image())
 		f.Close()
 	}

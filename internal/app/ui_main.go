@@ -115,6 +115,9 @@ func (a *app) show(r route) {
 	if r.page == pageAlbum {
 		a.loadAlbum(r.album)
 	}
+	if r.page == pagePodcast {
+		a.loadPodcast(r.podcast)
+	}
 }
 
 // back goes to the page before, as the back button of a mouse does, or
@@ -335,8 +338,6 @@ func (a *app) mineItem(c *ui.Context, icon *ui.SVG, label string, kind mineKind)
 }
 
 // mineList lists what the entry of 我的 chosen holds, under its heading.
-// Podcasts have no list yet: NetEase's come as shows, which the app does
-// not load.
 func (a *app) mineList(c *ui.Context) {
 	switch a.mineShown {
 	case mineAlbums:
@@ -344,7 +345,7 @@ func (a *app) mineList(c *ui.Context) {
 	case mineSaved:
 		a.playlistList(c, "收藏的歌单", a.saved, false, "登录后，收藏的歌单显示在这里")
 	case minePodcasts:
-		a.playlistList(c, "播客", nil, false, "播客还没有接入")
+		a.podcastList(c)
 	default:
 		a.playlistList(c, "我的歌单", a.mine, true, "登录后，你的歌单显示在这里")
 	}
@@ -391,7 +392,11 @@ func (a *app) playFrom(tracks []netease.Track, at int) {
 // a song from none of 我的 remembers nothing, which leaves both shut.
 func (a *app) noteSource() {
 	name, id := "", int64(0)
-	if a.route.page == pageAlbum {
+	if a.route.page == pagePodcast {
+		if _, ok := a.routeMine(a.route); ok {
+			name, id = minePodcasts.setting(), a.route.podcast
+		}
+	} else if a.route.page == pageAlbum {
 		if _, ok := a.routeMine(a.route); ok {
 			name, id = mineAlbums.setting(), a.route.album
 		}
@@ -421,6 +426,10 @@ func (a *app) restoreSide() {
 		a.route = route{page: pageAlbum, album: a.settings.SidePlaylist}
 		return
 	}
+	if kind == minePodcasts {
+		a.route = route{page: pagePodcast, podcast: a.settings.SidePlaylist}
+		return
+	}
 	a.route = route{page: pagePlaylist, playlist: a.settings.SidePlaylist}
 }
 
@@ -428,6 +437,17 @@ func (a *app) restoreSide() {
 // it lists any: the listener's own, or the ones they saved, or the albums
 // they saved.
 func (a *app) routeMine(r route) (mineKind, bool) {
+	if r.page == pagePodcast {
+		if _, ok := a.podcastInfo[r.podcast]; ok {
+			return minePodcasts, true
+		}
+		for _, pc := range a.podcasts {
+			if pc.ID == r.podcast {
+				return minePodcasts, true
+			}
+		}
+		return 0, false
+	}
 	if r.page == pageAlbum {
 		for _, al := range a.albums {
 			if al.ID == r.album {
@@ -596,6 +616,8 @@ func (a *app) content(c *ui.Context) {
 		a.playlistPage(c)
 	case pageAlbum:
 		a.albumPage(c)
+	case pagePodcast:
+		a.podcastPage(c)
 	case pageSearch:
 		a.searchPage(c)
 	case pageFM:

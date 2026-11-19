@@ -52,17 +52,23 @@ func (a *app) signedIn(prof *netease.Profile) {
 	a.restoreSession()
 	a.mine, a.saved, a.recPlaylists, a.liked = nil, nil, nil, nil
 	a.albums = nil
+	a.found = nil
 	// What the listener may play changed: load the lists again.
 	a.playlists = map[int64]*netease.Playlist{}
 	a.plErr = map[int64]string{}
 	a.albumSongs = map[int64]*netease.AlbumSongs{}
 	a.loadingAl = map[int64]bool{}
 	a.alErr = map[int64]string{}
+	// The podcasts opened here are the app's own, whatever the session.
+	a.loadKeptPodcasts()
 	if a.route.page == pagePlaylist {
 		a.loadPlaylist(a.route.playlist, false)
 	}
 	if a.route.page == pageAlbum {
 		a.loadAlbum(a.route.album)
+	}
+	if a.route.page == pagePodcast {
+		a.loadPodcast(a.route.podcast)
 	}
 	if a.searched != "" {
 		a.runSearch(a.searched)
