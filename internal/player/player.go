@@ -64,6 +64,9 @@ type Player struct {
 	effect *effectChain
 	loading bool
 	playing bool // what the listener wants: false while paused
+	// flushedAt is when the decoder's head was dropped for an effect, so that
+	// a run of clicks seeks once.
+	flushedAt time.Time
 	err     string
 	gen     int // counts loads, to drop the results of stale ones
 
@@ -495,13 +498,36 @@ func (p *Player) SetVolume(v float64) {
 	p.applyGain()
 }
 
+// effectAhead is how far the output mixes ahead of what is heard: the effect
+// reaches the ears only once that much has drained.
+const effectAhead = 250 * time.Millisecond
+
+// flushGap is how long after a seek the decoder's head goes on carrying what
+// it decoded, the newest effect among it.
+const flushGap = 150 * time.Millisecond
+
 // SetEffect puts the effect e over what plays, from the next buffer on, and
 // over the songs after it: nil takes it off. The song keeps its place.
+//
+// What the decoder made is a second ahead of the ears, so a change would wait
+// that long to be heard: the decoder's head is dropped, and what the output
+// holds plays on into the song with the effect as it is now.
 func (p *Player) SetEffect(e *Effect) {
 	p.Effect = e
-	if p.effect != nil {
-		p.effect.set(e)
+	if p.effect == nil || !p.effect.set(e) || p.out == nil {
+		return
 	}
+	// Clicking through the presets would seek on every one of them; within
+	// this long the last seek's refill already carries the newest one.
+	if time.Since(p.flushedAt) < flushGap {
+		return
+	}
+	p.flushedAt = time.Now()
+	at := p.out.Position()
+	if p.playing {
+		at += effectAhead
+	}
+	p.out.Seek(at)
 }
 
 // applyGain sets the volume of what plays: the listener's, which the ear

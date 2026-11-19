@@ -146,15 +146,16 @@ func newEffectChain(dec audio.Decoder, e *Effect) *effectChain {
 	return c
 }
 
-// set puts the effect e over what plays from the next buffer on: it builds the
-// plan off the audio thread and swaps it in at once. The sections keep nothing
-// of what played before them.
-func (c *effectChain) set(e *Effect) {
+// set puts the effect e over what plays from the next buffer on, and reports
+// whether it changed: it builds the plan off the audio thread and swaps it in
+// at once. The sections keep nothing of what played before them.
+func (c *effectChain) set(e *Effect) bool {
 	if e == c.eff {
-		return
+		return false
 	}
 	c.eff = e
 	c.cur.Store(c.plan(e))
+	return true
 }
 
 func (c *effectChain) plan(e *Effect) *chainPlan {
