@@ -51,11 +51,18 @@ func (a *app) signedIn(prof *netease.Profile) {
 	// the listener play their songs is back.
 	a.restoreSession()
 	a.mine, a.saved, a.recPlaylists, a.liked = nil, nil, nil, nil
+	a.albums = nil
 	// What the listener may play changed: load the lists again.
 	a.playlists = map[int64]*netease.Playlist{}
 	a.plErr = map[int64]string{}
+	a.albumSongs = map[int64]*netease.AlbumSongs{}
+	a.loadingAl = map[int64]bool{}
+	a.alErr = map[int64]string{}
 	if a.route.page == pagePlaylist {
 		a.loadPlaylist(a.route.playlist, false)
+	}
+	if a.route.page == pageAlbum {
+		a.loadAlbum(a.route.album)
 	}
 	if a.searched != "" {
 		a.runSearch(a.searched)
@@ -65,13 +72,15 @@ func (a *app) signedIn(prof *netease.Profile) {
 		// The page the last song played showed is one of the lists of
 		// nobody signed in: the home page instead of the error it would
 		// show.
-		if a.route.page == pagePlaylist && a.route.playlist == a.settings.SidePlaylist {
+		if a.route.page == pagePlaylist && a.route.playlist == a.settings.SidePlaylist ||
+			a.route.page == pageAlbum && a.route.album == a.settings.SidePlaylist {
 			a.show(route{page: pageHome})
 		}
 		return
 	}
 	a.loadLiked(prof.UserID)
 	a.loadMine(prof.UserID)
+	a.loadAlbums(prof.UserID)
 }
 
 func (a *app) openLogin() {
@@ -326,6 +335,36 @@ func (a *app) menuItem(c *ui.Context, icon *ui.SVG, label, shortcut string) ui.E
 		}
 	})
 	return b
+}
+
+// albumList lists the albums the listener saved, in the column of
+// playlists: a cover and its name, as the playlists show, under a heading.
+func (a *app) albumList(c *ui.Context) {
+	p := a.pal
+	ui.Row(c.Key("收藏的专辑")).Height(30).AlignItems(ui.Center).Padding(0, 4, 0, 6).Margin(8, 0, 0, 0).Children(func() {
+		ui.Text(c, "收藏的专辑").FontSize(13).FontWeight(700).TextColor(p.muted).Grow(1).SingleLine()
+	})
+	if len(a.albums) == 0 {
+		ui.Text(c, "登录后，收藏的专辑显示在这里").FontSize(12).TextColor(p.faint).MaxLines(3).LineHeight(1.5).Margin(2, 10, 4, 6)
+	}
+	for i := range a.albums {
+		al := &a.albums[i]
+		selected := a.route.page == pageAlbum && a.route.album == al.ID && !a.nowPlaying
+		b := ui.ButtonBase(c.Key(al.ID)).Height(52).PaddingX(6).Gap(11).Radius(9).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false).Label(al.Name)
+		switch {
+		case selected:
+			b.Background(p.press)
+		case b.Hovered():
+			b.Background(p.hover)
+		}
+		b.Children(func() {
+			a.cover(c, al.PicURL, 140, 40, 8)
+			ui.Text(c, al.Name).FontSize(14.5).SingleLine().Shrink(1).MinWidth(0)
+		})
+		if b.Clicked() {
+			a.open(route{page: pageAlbum, album: al.ID})
+		}
+	}
 }
 
 // playlistList lists playlists of the playlists' column: those the

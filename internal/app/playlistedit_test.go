@@ -24,6 +24,16 @@ func editTestApp() *app {
 		{ID: 11, Name: "睡前"},
 	}
 	a.saved = []netease.Playlist{{ID: 20, Name: "飙升榜"}}
+	a.albums = []netease.SavedAlbum{
+		{ID: 30, Name: "すずか", Artists: []netease.Artist{{Name: "市松寿ゞ謡"}}},
+		{ID: 31, Name: "来世に期待"},
+	}
+	a.albumSongs = map[int64]*netease.AlbumSongs{30: {
+		Album: a.albums[0],
+		Songs: []netease.Track{
+			{ID: 4, Name: "青のすみか", Artists: []netease.Artist{{Name: "市松寿ゞ謡"}}, Duration: 200000},
+		},
+	}}
 	a.playlists[10] = &netease.Playlist{ID: 10, Name: "通勤", Tracks: []netease.Track{
 		{ID: 1, Name: "一张相片", Artists: []netease.Artist{{Name: "林宥嘉"}}, Duration: 200000},
 		{ID: 2, Name: "宝船", Artists: []netease.Artist{{Name: "DOUDOU"}}, Duration: 200000},
@@ -402,6 +412,83 @@ func TestPlayingRemembersTheColumn(t *testing.T) {
 	half.restoreSide()
 	if half.mineOn || half.route.page != pageHome {
 		t.Errorf("half a memory opens %+v with the column %v", half.route, half.mineOn)
+	}
+}
+
+// Choosing 专辑 under 我的 lists the albums the listener saved, and one
+// opens its page: its credits over its songs. Playing a song from it
+// remembers 专辑, so the next launch opens the album beside the column.
+func TestAlbumsListAndOpen(t *testing.T) {
+	a := editTestApp()
+	a.homeLoading = true
+	a.route = route{page: pageHome}
+	tt := ui.NewTester(a.view, 1200, 800)
+	tt.Frame()
+	if _, ok := tt.Find("すずか"); ok {
+		t.Fatal("an album shows before 专辑 is chosen")
+	}
+	if err := tt.Click("专辑"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if _, ok := tt.Find("すずか"); !ok {
+		t.Fatalf("专辑 does not list the saved albums")
+	}
+	if _, ok := tt.Find("通勤"); ok {
+		t.Error("专辑 still lists the listener's playlists")
+	}
+	if err := tt.Click("すずか"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.route.page != pageAlbum || a.route.album != 30 {
+		t.Fatalf("opening the album went to %+v", a.route)
+	}
+	if !tt.HasText("市松寿ゞ謡") {
+		t.Error("the album page does not show who made it")
+	}
+	if err := tt.Click("青のすみか"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.settings.SideMine != "albums" || a.settings.SidePlaylist != 30 {
+		t.Errorf("playing from album 30 remembers %q %d", a.settings.SideMine, a.settings.SidePlaylist)
+	}
+
+	into := editTestApp()
+	into.settings = settings{SideMine: "albums", SidePlaylist: 30}
+	into.route = route{page: pageHome}
+	into.restoreSide()
+	if !into.mineOn || into.mineShown != mineAlbums {
+		t.Errorf("the column opens on %v, %v, want 专辑", into.mineShown, into.mineOn)
+	}
+	if into.route.page != pageAlbum || into.route.album != 30 {
+		t.Errorf("the app opens on %+v, want album 30", into.route)
+	}
+}
+
+// With NM_FRAMES set, saves the column of albums beside the categories and
+// the page of one of them, to look at.
+func TestAlbumFrames(t *testing.T) {
+	dir := os.Getenv("NM_FRAMES")
+	if dir == "" {
+		t.Skip()
+	}
+	a := editTestApp()
+	a.route = route{page: pageAlbum, album: 30}
+	a.mineShown, a.mineOn = mineAlbums, true
+	tt := ui.NewTester(a.view, 1200, 800)
+	for _, dark := range []bool{false, true} {
+		suffix := "-light"
+		if dark {
+			suffix = "-dark"
+		}
+		tt.SetDark(dark)
+		tt.Advance(400 * time.Millisecond)
+		tt.Frame()
+		f, _ := os.Create(filepath.Join(dir, "album"+suffix+".png"))
+		png.Encode(f, tt.Image())
+		f.Close()
 	}
 }
 

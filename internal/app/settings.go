@@ -51,11 +51,12 @@ type settings struct {
 	CacheMB int `json:"cacheMB"`
 	// SideMine is the list of 我的 the column of playlists beside the
 	// categories showed for the last song played: the listener's playlists
-	// (playlists), their saved ones (saved), or the podcasts; empty when it
-	// came from none of them, and so nothing shows beside the categories.
+	// (playlists), their saved ones (saved), the albums they saved (albums),
+	// or the podcasts; empty when it came from none of them, and so nothing
+	// shows beside the categories.
 	SideMine string `json:"sideMine"`
-	// SidePlaylist is the playlist that list held the last song played in,
-	// whose page shows beside the column on the next launch.
+	// SidePlaylist is the playlist, or album, that list held the last song
+	// played in, whose page shows beside the column on the next launch.
 	SidePlaylist int64 `json:"sidePlaylist"`
 	// WindowWidth and WindowHeight are how big the window was left, and
 	// WindowX and WindowY where, for the next launch; 0 for the size it
@@ -82,6 +83,8 @@ func (s settings) sideMine() (mineKind, bool) {
 		return mineSaved, true
 	case "podcasts":
 		return minePodcasts, true
+	case "albums":
+		return mineAlbums, true
 	}
 	return minePlaylists, false
 }

@@ -18,6 +18,7 @@ const (
 	pageDaily
 	pageCharts
 	pagePlaylist
+	pageAlbum
 	pageSearch
 	pageFM
 )
@@ -25,6 +26,7 @@ const (
 type route struct {
 	page     pageKind
 	playlist int64
+	album    int64
 }
 
 // mineKind is a list of the sidebar's 我的 section, which the column of
@@ -33,6 +35,7 @@ type mineKind int
 
 const (
 	minePlaylists mineKind = iota // 歌单
+	mineAlbums                    // 专辑
 	mineSaved                     // 收藏
 	minePodcasts                  // 播客
 )
@@ -52,8 +55,9 @@ type app struct {
 	forward []route // the pages gone back from, the last first to go to
 
 	profile      *netease.Profile
-	mine, saved  []netease.Playlist // the listener's playlists: made, and saved
-	recPlaylists []netease.Playlist // the day's playlists picked for the listener
+	mine, saved  []netease.Playlist   // the listener's playlists: made, and saved
+	albums       []netease.SavedAlbum // the albums the listener saved
+	recPlaylists []netease.Playlist   // the day's playlists picked for the listener
 	login        loginState
 	accountOpen  bool // the dropdown of the account row shows
 	// The sidebar's 我的 section: closed (the default is open), which of
@@ -82,7 +86,11 @@ type app struct {
 	playlists map[int64]*netease.Playlist
 	loadingPl map[int64]bool
 	plErr     map[int64]string
-	trackList ui.ListState
+	// The album opened, with its songs, and the one loading.
+	albumSongs map[int64]*netease.AlbumSongs
+	loadingAl  map[int64]bool
+	alErr      map[int64]string
+	trackList  ui.ListState
 	// Where the page, the sidebar's categories and its playlists are
 	// scrolled, kept while Now Playing covers them, unbuilt.
 	pageScroll ui.ScrollState

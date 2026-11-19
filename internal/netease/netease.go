@@ -69,9 +69,12 @@ func withPrivileges(tracks []Track, privileges []Privilege) {
 }
 
 // ArtistNames joins the track's artists as the credits read.
-func (t *Track) ArtistNames() string {
-	names := make([]string, len(t.Artists))
-	for i, a := range t.Artists {
+func (t *Track) ArtistNames() string { return artistNames(t.Artists) }
+
+// artistNames joins artists as the credits read.
+func artistNames(artists []Artist) string {
+	names := make([]string, len(artists))
+	for i, a := range artists {
 		names[i] = a.Name
 	}
 	return strings.Join(names, ", ")
