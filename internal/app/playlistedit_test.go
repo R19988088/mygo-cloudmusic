@@ -393,6 +393,16 @@ func TestPlayingRemembersTheColumn(t *testing.T) {
 	if fresh.route.page != pageHome {
 		t.Errorf("nothing kept opens %+v, want the home page", fresh.route)
 	}
+	// A list without the playlist it held, as the settings of an older app
+	// keep, shows neither the column nor a page: not that list beside the
+	// home page.
+	half := editTestApp()
+	half.settings = settings{SideMine: "playlists"}
+	half.route = route{page: pageHome}
+	half.restoreSide()
+	if half.mineOn || half.route.page != pageHome {
+		t.Errorf("half a memory opens %+v with the column %v", half.route, half.mineOn)
+	}
 }
 
 // Cancelling the confirmation deletes nothing.

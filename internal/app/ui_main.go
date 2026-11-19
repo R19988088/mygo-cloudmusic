@@ -397,12 +397,17 @@ func (a *app) noteSource() {
 
 // restoreSide shows what the sidebar kept of the last song played: the list
 // it came from, whose playlists show beside the categories, and the page of
-// its playlist, not the home page the app would open on.
+// its playlist, not the home page the app would open on. Both or neither:
+// a list without its playlist would show that list beside a page of
+// something else.
 func (a *app) restoreSide() {
-	a.mineShown, a.mineOn = a.settings.sideMine()
-	if a.mineOn && a.settings.SidePlaylist != 0 {
-		a.route = route{page: pagePlaylist, playlist: a.settings.SidePlaylist}
+	kind, ok := a.settings.sideMine()
+	if !ok || a.settings.SidePlaylist == 0 {
+		a.mineOn = false
+		return
 	}
+	a.mineShown, a.mineOn = kind, true
+	a.route = route{page: pagePlaylist, playlist: a.settings.SidePlaylist}
 }
 
 // routeMine returns which of 我的 the page of r lists the playlists of, if
