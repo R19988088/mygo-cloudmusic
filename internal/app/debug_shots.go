@@ -34,11 +34,11 @@ func init() {
 			}
 			mygo.RunOnMain(func() { a.win.Show(); a.win.Focus() })
 			if os.Getenv("NM_SCENE") == "skin" {
-				// The colors chosen in the settings: the categories' column and
-				// the icons in it, and the window that chose them.
+				// The colors chosen in the settings, each column of the
+				// sidebar its own, and the window that chose them.
 				step(0, func() {
-					a.settings.MainColor = "#eae4f2"
-					a.settings.IconColor = "#ff6a3d"
+					a.settings.MainColor, a.settings.MainText, a.settings.IconColor = "#e6e2f0", "#2e2740", "#ff6a3d"
+					a.settings.SideColor, a.settings.SideText, a.settings.SideIcon = "#fdf7ef", "#4a3b2f", "#3b82f6"
 				})
 				time.Sleep(2 * time.Second)
 				shot("skin", a.win)

@@ -7,6 +7,14 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
+// colorWells are the colors the settings window shows, one for each of the
+// sidebar's two columns: the categories' background, words and icons, and the
+// playlists' beside it.
+type colorWells struct {
+	navBG, navText, navIcon ui.Color
+	plBG, plText, plIcon    ui.Color
+}
+
 // openSettings shows the settings window, opening it the first time.
 func (a *app) openSettings() {
 	if a.settingsWin != nil {
@@ -164,35 +172,67 @@ func (a *app) settingsView(c *ui.Context) {
 					a.changed()
 				}
 			})
-			// The colors the listener chose, over the appearance's: the wells
-			// show the one in use, and 默认 goes back to the appearance's.
+			// The colors the listener chose for each of the sidebar's two
+			// columns, over the appearance's: the wells show the ones in use,
+			// and 默认 goes back to the appearance's.
 			shown := paletteFor(&t)
 			s.colors(&shown)
-			a.mainW, a.iconW = shown.sidebar, shown.navIcon(false)
+			a.wells = colorWells{
+				navBG: shown.sidebar, navText: shown.words(shown.nav).text, navIcon: shown.navIcons(false),
+				plBG: shown.plBg(), plText: shown.words(shown.pl).text, plIcon: shown.plIcons(),
+			}
 			def := paletteFor(&t)
-			row("主栏底色", "左栏分类栏的底色；「默认」跟随外观", func() {
-				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-					if ui.ColorWell(c.Key("main-color"), &a.mainW).Label("主栏底色").Changed() {
-						s.MainColor = hexOf(a.mainW)
-						a.changed()
+			colors := func(key string, vals []*ui.Color, captions []string,
+				set func(i int, chosen ui.Color), reset func()) {
+				ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+					for i, v := range vals {
+						ui.Column(c).Gap(2).AlignItems(ui.Center).Children(func() {
+							ui.Text(c, captions[i]).FontSize(11).TextColor(p.muted)
+							if ui.ColorWell(c.Key(key+"-"+captions[i]), v).Label(captions[i]).Changed() {
+								set(i, *v)
+							}
+						})
 					}
-					if ui.Button(c.Key("main-color-default"), "默认").Clicked() {
-						s.MainColor, a.mainW = "", def.sidebar
-						a.changed()
+					if ui.Button(c.Key(key+"-default"), "默认").Clicked() {
+						reset()
 					}
 				})
+			}
+			row("一级栏", "最左的分类栏：底色、字体色、图标色；「默认」跟随外观", func() {
+				colors("nav", []*ui.Color{&a.wells.navBG, &a.wells.navText, &a.wells.navIcon},
+					[]string{"底色", "字体", "图标"}, func(i int, c ui.Color) {
+						switch i {
+						case 0:
+							s.MainColor = hexOf(c)
+						case 1:
+							s.MainText = hexOf(c)
+						default:
+							s.IconColor = hexOf(c)
+						}
+						a.changed()
+					}, func() {
+						s.MainColor, s.MainText, s.IconColor = "", "", ""
+						a.wells.navBG, a.wells.navText, a.wells.navIcon = def.sidebar, def.words(def.nav).text, def.navIcons(false)
+						a.changed()
+					})
 			})
-			row("图标色", "左栏分类与「我的」的图标颜色；「默认」跟随外观", func() {
-				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-					if ui.ColorWell(c.Key("icon-color"), &a.iconW).Label("图标色").Changed() {
-						s.IconColor = hexOf(a.iconW)
+			row("二级栏", "分类旁的歌单、专辑与播客栏：底色、字体色、图标色；「默认」跟随外观", func() {
+				colors("pl", []*ui.Color{&a.wells.plBG, &a.wells.plText, &a.wells.plIcon},
+					[]string{"底色", "字体", "图标"}, func(i int, c ui.Color) {
+						switch i {
+						case 0:
+							s.SideColor = hexOf(c)
+						case 1:
+							s.SideText = hexOf(c)
+						default:
+							s.SideIcon = hexOf(c)
+						}
 						a.changed()
-					}
-					if ui.Button(c.Key("icon-color-default"), "默认").Clicked() {
-						s.IconColor, a.iconW = "", def.navIcon(false)
+					}, func() {
+						s.SideColor, s.SideText, s.SideIcon = "", "", ""
+						a.wells.plBG, a.wells.plText, a.wells.plIcon = def.plBg(), def.words(def.pl).text, def.plIcons()
 						a.changed()
-					}
-				})
+					})
 			})
 		})
 

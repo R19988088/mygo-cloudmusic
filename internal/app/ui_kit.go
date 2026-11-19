@@ -14,7 +14,7 @@ import (
 type palette struct {
 	dark      bool
 	bg        ui.Color // the content's background
-	sidebar   ui.Color // under the sidebar where no material shows
+	sidebar   ui.Color // under the categories where no material shows
 	text      ui.Color
 	muted     ui.Color
 	faint     ui.Color
@@ -24,22 +24,64 @@ type palette struct {
 	accent    ui.Color
 	onAccent  ui.Color
 	cardShade ui.Color
-	// icon is the color of the categories' icons where the listener chose
-	// one, which iconSet says they did.
-	icon    ui.Color
-	iconSet bool
+	// nav and pl hold the colors the listener chose for the categories'
+	// column and the playlists' beside it, over the appearance's.
+	nav, pl skin
 }
 
-// navIcon returns the color of the categories' icons: the listener's where
-// they chose one, else the appearance's.
-func (p palette) navIcon(selected bool) ui.Color {
-	if p.iconSet {
-		return p.icon
+// skin is the colors the listener chose for one of the sidebar's columns: the
+// background it lays on, the words of its entries, and their icons.
+type skin struct {
+	bg, words, icons          ui.Color
+	bgSet, wordsSet, iconsSet bool
+}
+
+// ink is how a column of the sidebar writes: its words, and those faded for
+// what is less important.
+type ink struct{ text, muted, faint ui.Color }
+
+// words returns the ink of the column of s: the listener's color where they
+// chose one, faded for what is less important; else the appearance's.
+func (p palette) words(s skin) ink {
+	if s.wordsSet {
+		return ink{s.words, s.words.Alpha(0.62), s.words.Alpha(0.3)}
+	}
+	return ink{p.text, p.muted, p.faint}
+}
+
+// navIcons returns the color of the categories' icons: the listener's where
+// they chose one, else the appearance's, which they lift as an entry is
+// chosen.
+func (p palette) navIcons(selected bool) ui.Color {
+	if p.nav.iconsSet {
+		return p.nav.icons
 	}
 	if selected {
 		return p.text
 	}
 	return p.muted
+}
+
+// plIcons returns the color of the icons in the playlists' column: the
+// listener's where they chose one, else the appearance's.
+func (p palette) plIcons() ui.Color {
+	if p.pl.iconsSet {
+		return p.pl.icons
+	}
+	return p.muted
+}
+
+// plBg returns the color under the playlists' column: the listener's where
+// they chose one, else the categories' own, a little lighter.
+func (p palette) plBg() ui.Color {
+	if p.pl.bgSet {
+		return p.pl.bg
+	}
+	shade := float32(0.5)
+	if p.dark {
+		shade = 0.05
+	}
+	return p.sidebar.Mix(white, shade)
 }
 
 func paletteFor(t *ui.Theme) palette {

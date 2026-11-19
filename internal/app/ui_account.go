@@ -272,6 +272,7 @@ func (a *app) profileName() string {
 // dropdown to open the settings or sign out, or a way to sign in.
 func (a *app) accountRow(c *ui.Context) {
 	p := a.pal
+	w := p.words(p.nav)
 	b := ui.ButtonBase(c.Key("account")).Height(40).PaddingX(8).Gap(10).Radius(10).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false)
 	if b.Hovered() || a.accountOpen && a.profile != nil {
 		b.Background(p.hover)
@@ -280,9 +281,9 @@ func (a *app) accountRow(c *ui.Context) {
 		a.accountOpen = false
 		b.Label("登录").Children(func() {
 			ui.Box(c).Size(26, 26).Radius(13).Background(p.press).Center().Children(func() {
-				ui.Icon(c, iconUser).Size(14, 14).TextColor(p.muted)
+				ui.Icon(c, iconUser).Size(14, 14).TextColor(p.navIcons(false))
 			})
-			ui.Text(c, "登录网易云音乐").FontSize(13).FontWeight(500).TextColor(p.muted)
+			ui.Text(c, "登录网易云音乐").FontSize(13).FontWeight(500).TextColor(w.muted)
 		})
 		if b.Clicked() {
 			a.openLogin()
@@ -292,8 +293,8 @@ func (a *app) accountRow(c *ui.Context) {
 	prof := a.profile
 	b.Label(prof.Nickname).Expanded(a.accountOpen).Children(func() {
 		a.avatar(c, prof.AvatarURL, 26, p.press)
-		ui.Text(c, prof.Nickname).FontSize(13).FontWeight(600).SingleLine().Grow(1).Shrink(1).MinWidth(0)
-		ui.Icon(c, iconUpDown).Size(13, 13).TextColor(p.faint)
+		ui.Text(c, prof.Nickname).FontSize(13).FontWeight(600).SingleLine().Grow(1).Shrink(1).MinWidth(0).TextColor(w.text)
+		ui.Icon(c, iconUpDown).Size(13, 13).TextColor(w.faint)
 	})
 	if b.Clicked() {
 		a.accountOpen = !a.accountOpen
@@ -352,11 +353,12 @@ func (a *app) menuItem(c *ui.Context, icon *ui.SVG, label, shortcut string) ui.E
 // playlists: a cover and its name, as the playlists show, under a heading.
 func (a *app) albumList(c *ui.Context) {
 	p := a.pal
+	w := p.words(p.pl)
 	ui.Row(c.Key("收藏的专辑")).Height(30).AlignItems(ui.Center).Padding(0, 4, 0, 6).Margin(8, 0, 0, 0).Children(func() {
-		ui.Text(c, "收藏的专辑").FontSize(13).FontWeight(700).TextColor(p.muted).Grow(1).SingleLine()
+		ui.Text(c, "收藏的专辑").FontSize(13).FontWeight(700).TextColor(w.muted).Grow(1).SingleLine()
 	})
 	if len(a.albums) == 0 {
-		ui.Text(c, "登录后，收藏的专辑显示在这里").FontSize(12).TextColor(p.faint).MaxLines(3).LineHeight(1.5).Margin(2, 10, 4, 6)
+		ui.Text(c, "登录后，收藏的专辑显示在这里").FontSize(12).TextColor(w.faint).MaxLines(3).LineHeight(1.5).Margin(2, 10, 4, 6)
 	}
 	for i := range a.albums {
 		al := &a.albums[i]
@@ -370,7 +372,7 @@ func (a *app) albumList(c *ui.Context) {
 		}
 		b.Children(func() {
 			a.cover(c, al.PicURL, 140, 40, 8)
-			ui.Text(c, al.Name).FontSize(14.5).SingleLine().Shrink(1).MinWidth(0)
+			ui.Text(c, al.Name).FontSize(14.5).SingleLine().Shrink(1).MinWidth(0).TextColor(w.text)
 		})
 		if b.Clicked() {
 			a.open(route{page: pageAlbum, album: al.ID})
@@ -383,14 +385,15 @@ func (a *app) albumList(c *ui.Context) {
 // and a menu to rename them. Without any, it says empty instead.
 func (a *app) playlistList(c *ui.Context, title string, lists []netease.Playlist, mine bool, empty string) {
 	p := a.pal
+	w := p.words(p.pl)
 	ui.Row(c.Key(title)).Height(30).AlignItems(ui.Center).Padding(0, 4, 0, 6).Margin(8, 0, 0, 0).Children(func() {
-		ui.Text(c, title).FontSize(13).FontWeight(700).TextColor(p.muted).Grow(1).SingleLine()
-		if mine && a.profile != nil && iconButton(c.Key("new"), iconPlus, 13, p.faint, "新建歌单").Clicked() {
+		ui.Text(c, title).FontSize(13).FontWeight(700).TextColor(w.muted).Grow(1).SingleLine()
+		if mine && a.profile != nil && iconButton(c.Key("new"), iconPlus, 13, w.faint, "新建歌单").Clicked() {
 			a.newPlaylist(nil)
 		}
 	})
 	if len(lists) == 0 {
-		ui.Text(c, empty).FontSize(12).TextColor(p.faint).MaxLines(3).LineHeight(1.5).Margin(2, 10, 4, 6)
+		ui.Text(c, empty).FontSize(12).TextColor(w.faint).MaxLines(3).LineHeight(1.5).Margin(2, 10, 4, 6)
 	}
 	for i := range lists {
 		pl := &lists[i]
@@ -404,7 +407,7 @@ func (a *app) playlistList(c *ui.Context, title string, lists []netease.Playlist
 		}
 		b.Children(func() {
 			a.cover(c, pl.Cover(), 140, 40, 8)
-			ui.Text(c, pl.Name).FontSize(14.5).SingleLine().Shrink(1).MinWidth(0)
+			ui.Text(c, pl.Name).FontSize(14.5).SingleLine().Shrink(1).MinWidth(0).TextColor(w.text)
 		})
 		if mine && pl.SpecialType != 5 {
 			b.ContextMenu(func(m *ui.Menu) {

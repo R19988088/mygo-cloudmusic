@@ -348,8 +348,8 @@ func TestSegmentedFrames(t *testing.T) {
 }
 
 // With NM_FRAMES set, saves the colors of the settings with the picker of
-// 主栏底色 open, light and dark: the sheet scrolls, and the picker must not
-// be clipped by it.
+// the categories' background open, light and dark: the sheet scrolls, and the
+// picker must not be clipped by it.
 func TestColorWellFrames(t *testing.T) {
 	dir := os.Getenv("NM_FRAMES")
 	if dir == "" {
@@ -358,16 +358,16 @@ func TestColorWellFrames(t *testing.T) {
 	for _, dark := range []bool{false, true} {
 		a := newTestApp()
 		a.settings = defaultSettings()
-		a.settings.MainColor = "#eef3f8"
+		a.settings.MainColor = "#e6e2f0"
 		tt := ui.NewTester(a.settingsView, 560, 900)
 		tt.SetDark(dark)
 		tt.Frame()
-		desc, ok := tt.Find("页面与播放器下的底色；「默认」跟随外观")
+		desc, ok := tt.Find("最左的分类栏：底色、字体色、图标色；「默认」跟随外观")
 		if !ok {
-			t.Fatal("no row for the page's color")
+			t.Fatal("no row for the categories' colors")
 		}
-		// The well sits left of the button at the row's end.
-		tt.ClickAt(560-28-16-56-6-14, desc.Y+desc.H/2)
+		// The wells sit at the row's end, before the button: 底色 first.
+		tt.ClickAt(560-28-16-56-12-33-12-33-12-16, desc.Y+desc.H/2)
 		tt.Frame()
 		name := "colors-light.png"
 		if dark {

@@ -199,7 +199,7 @@ func (a *app) navColumn(c *ui.Context) {
 			field.Background(p.hover).Border(1, p.hairline)
 		}
 		field.Children(func() {
-			ui.Icon(c, iconSearch).Size(13, 13).TextColor(p.navIcon(false))
+			ui.Icon(c, iconSearch).Size(13, 13).TextColor(p.navIcons(false))
 			in := ui.TextInputBase(c.Key("search"), &a.query).Bind(&a.searchBox).Grow(1).
 				Placeholder("搜索歌曲、歌手").FontSize(12.5).Label("搜索")
 			if in.Submitted() && strings.TrimSpace(a.query) != "" {
@@ -247,13 +247,9 @@ func (a *app) playlistColumn(c *ui.Context) {
 	a.plW = w
 	col.Width(w)
 	if runtime.GOOS != "darwin" || !c.Vibrancy() {
-		// A little lighter than the categories beside it, as the playlists
-		// of Music are.
-		shade := float32(0.5)
-		if p.dark {
-			shade = 0.05
-		}
-		col.Background(p.sidebar.Mix(white, shade))
+		// The listener's color for it, or else one a little lighter than the
+		// categories beside it, as the playlists of Music are.
+		col.Background(p.plBg())
 	}
 	if target == 0 && w < 0.5 {
 		// Shut: nothing to list, no line to draw, and nothing built behind
@@ -277,7 +273,7 @@ func (a *app) playlistColumn(c *ui.Context) {
 // navHeader is the heading of a group of the categories, as the headings
 // of Library in Music.
 func (a *app) navHeader(c *ui.Context, title string) {
-	ui.Text(c, title).FontSize(11.5).FontWeight(600).TextColor(a.pal.faint).Margin(8, 4, 3, 6)
+	ui.Text(c, title).FontSize(11.5).FontWeight(600).TextColor(a.pal.words(a.pal.nav).faint).Margin(8, 4, 3, 6)
 }
 
 // navGroup is the heading of a group of entries which folds away and out
@@ -290,7 +286,7 @@ func (a *app) navGroup(c *ui.Context, title string, closed *bool, fn func()) {
 		b.Background(p.hover)
 	}
 	b.Children(func() {
-		ui.Text(c, title).FontSize(11.5).FontWeight(600).TextColor(p.faint).SingleLine()
+		ui.Text(c, title).FontSize(11.5).FontWeight(600).TextColor(p.words(p.nav).faint).SingleLine()
 		// Closed, the arrow points at the entries it hides, as a chevron
 		// of the sidebar's headings does.
 		turn := float32(-90)
@@ -298,7 +294,7 @@ func (a *app) navGroup(c *ui.Context, title string, closed *bool, fn func()) {
 			turn = 0
 		}
 		ui.Icon(c, iconDown).Size(10, 10).Rotate(b.AnimateTo("turn", turn, ui.Animation{Duration: 150 * time.Millisecond})).
-			TextColor(p.faint)
+			TextColor(p.words(p.nav).faint)
 	})
 	if b.Clicked() {
 		*closed = !*closed
@@ -323,10 +319,10 @@ func (a *app) mineItem(c *ui.Context, icon *ui.SVG, label string, kind mineKind)
 		bg = p.hover
 	}
 	b.Background(b.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
-	iconColor := p.navIcon(selected)
+	iconColor := p.navIcons(selected)
 	b.Children(func() {
 		ui.Icon(c, icon).Size(16, 16).TextColor(iconColor)
-		ui.Text(c, label).FontSize(13).FontWeight(500).TextColor(p.text)
+		ui.Text(c, label).FontSize(13).FontWeight(500).TextColor(p.words(p.nav).text)
 	})
 	if b.Clicked() {
 		a.chooseMine(kind)
@@ -420,10 +416,10 @@ func (a *app) navItem(c *ui.Context, icon *ui.SVG, label string, r route) {
 		bg = p.hover
 	}
 	b.Background(b.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
-	iconColor := p.navIcon(selected)
+	iconColor := p.navIcons(selected)
 	b.Children(func() {
 		ui.Icon(c, icon).Size(17, 17).TextColor(iconColor)
-		ui.Text(c, label).FontSize(13).FontWeight(500).TextColor(p.text)
+		ui.Text(c, label).FontSize(13).FontWeight(500).TextColor(p.words(p.nav).text)
 	})
 	if b.Clicked() {
 		// A page opened closes the playlists' column, which one of 我的

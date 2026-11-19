@@ -25,11 +25,12 @@ const podcastProgramLimit = 500
 // saved show.
 func (a *app) podcastList(c *ui.Context) {
 	p := a.pal
+	w := p.words(p.pl)
 	ui.Row(c.Key("收藏的播客")).Height(30).AlignItems(ui.Center).Padding(0, 4, 0, 6).Margin(8, 0, 0, 0).Children(func() {
-		ui.Text(c, "收藏的播客").FontSize(13).FontWeight(700).TextColor(p.muted).Grow(1).SingleLine()
+		ui.Text(c, "收藏的播客").FontSize(13).FontWeight(700).TextColor(w.muted).Grow(1).SingleLine()
 	})
 	if len(a.podcasts) == 0 {
-		ui.Text(c, "登录后，收藏的播客显示在这里").FontSize(12).TextColor(p.faint).MaxLines(3).LineHeight(1.5).Margin(2, 10, 4, 6)
+		ui.Text(c, "登录后，收藏的播客显示在这里").FontSize(12).TextColor(w.faint).MaxLines(3).LineHeight(1.5).Margin(2, 10, 4, 6)
 	}
 	for i := range a.podcasts {
 		pc := &a.podcasts[i]
@@ -43,7 +44,7 @@ func (a *app) podcastList(c *ui.Context) {
 		}
 		b.Children(func() {
 			a.cover(c, pc.PicURL, 140, 40, 8)
-			ui.Text(c, pc.Name).FontSize(14.5).SingleLine().Shrink(1).MinWidth(0)
+			ui.Text(c, pc.Name).FontSize(14.5).SingleLine().Shrink(1).MinWidth(0).TextColor(w.text)
 		})
 		if b.Clicked() {
 			a.open(route{page: pagePodcast, podcast: pc.ID})

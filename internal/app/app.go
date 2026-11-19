@@ -56,7 +56,7 @@ type app struct {
 	pal   palette
 	// The colors the settings window shows in its wells: the listener's, or
 	// the appearance's while they chose none.
-	mainW, iconW ui.Color
+	wells colorWells
 
 	route   route
 	history []route

@@ -31,11 +31,17 @@ type settings struct {
 	Quality string `json:"quality"`
 	// Appearance is light, dark, or system to follow the system.
 	Appearance string `json:"appearance"`
-	// MainColor is the color of the categories' column as #rrggbb, and
-	// IconColor the color of its icons: the listener's own, where they chose
-	// them. Empty follows the appearance.
+	// MainColor, MainText and IconColor are the colors of the categories'
+	// column as #rrggbb — the background it lays on, its words and its icons
+	// — and SideColor, SideText and SideIcon the colors of the playlists'
+	// column beside it: the listener's own, where they chose them. Empty
+	// follows the appearance.
 	MainColor string `json:"mainColor"`
+	MainText  string `json:"mainText"`
 	IconColor string `json:"iconColor"`
+	SideColor string `json:"sideColor"`
+	SideText  string `json:"sideText"`
+	SideIcon  string `json:"sideIcon"`
 	// Smoke makes the progress bars comets trailing smoke as music plays,
 	// for a few percent of a core: the listener turns it on.
 	Smoke bool `json:"smoke"`
@@ -183,13 +189,26 @@ func (s settings) applyAppearance() {
 	}
 }
 
-// colors puts the colors the listener chose over the appearance's.
+// colors puts the colors the listener chose over the appearance's: those of
+// the categories' column, and of the playlists' beside it.
 func (s settings) colors(p *palette) {
 	if c, ok := colorOf(s.MainColor); ok {
-		p.sidebar = c
+		p.sidebar, p.nav.bg, p.nav.bgSet = c, c, true
+	}
+	if c, ok := colorOf(s.MainText); ok {
+		p.nav.words, p.nav.wordsSet = c, true
 	}
 	if c, ok := colorOf(s.IconColor); ok {
-		p.icon, p.iconSet = c, true
+		p.nav.icons, p.nav.iconsSet = c, true
+	}
+	if c, ok := colorOf(s.SideColor); ok {
+		p.pl.bg, p.pl.bgSet = c, true
+	}
+	if c, ok := colorOf(s.SideText); ok {
+		p.pl.words, p.pl.wordsSet = c, true
+	}
+	if c, ok := colorOf(s.SideIcon); ok {
+		p.pl.icons, p.pl.iconsSet = c, true
 	}
 }
 
