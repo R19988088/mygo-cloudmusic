@@ -38,8 +38,7 @@ func editTestApp() *app {
 		{ID: 1, Name: "一张相片", Artists: []netease.Artist{{Name: "林宥嘉"}}, Duration: 200000},
 		{ID: 2, Name: "宝船", Artists: []netease.Artist{{Name: "DOUDOU"}}, Duration: 200000},
 	}}
-	// A podcast opened here before, with one program: NetEase serves no list
-	// of what the listener follows, so the column lists the app's own.
+	// A podcast the listener follows, with one program loaded.
 	pc := &netease.Podcast{ID: 40, Name: "代码时间", Category: "知识"}
 	pc.DJ.Nickname = "Robin"
 	a.podcasts = []netease.Podcast{*pc}
@@ -47,7 +46,7 @@ func editTestApp() *app {
 	a.podcastPrograms = map[int64][]netease.PodcastProgram{40: {
 		{ID: 400, Name: "第一期", Duration: 300000, MainSong: netease.Track{ID: 401, Name: "第一期", Duration: 300000}},
 	}}
-	a.settings.Podcasts = []int64{40}
+	a.podLoaded = map[int64]bool{40: true}
 	a.route = route{page: pagePlaylist, playlist: 10}
 	// 歌单 is chosen, which shows the sidebar's column of playlists.
 	a.mineOn = true
@@ -271,7 +270,7 @@ func TestDeletePlaylist(t *testing.T) {
 
 // Choosing 收藏 under 我的 lists the saved playlists in the column of
 // playlists instead of the listener's own, and 播客, lists the podcasts
-// opened here. Closing 我的 hides its entries.
+// they follow. Closing 我的 hides its entries.
 func TestMineSectionSwitchesTheColumn(t *testing.T) {
 	a := editTestApp()
 	a.homeLoading = true
@@ -297,7 +296,7 @@ func TestMineSectionSwitchesTheColumn(t *testing.T) {
 	tt.Advance(300 * time.Millisecond)
 	tt.Frame()
 	if _, ok := tt.Find("代码时间"); !ok {
-		t.Error("播客 does not list the podcasts opened here")
+		t.Error("播客 does not list the podcasts the listener follows")
 	}
 	if _, ok := tt.Find("飙升榜"); ok {
 		t.Error("播客 still lists the saved playlists")
@@ -506,9 +505,9 @@ func TestAlbumFrames(t *testing.T) {
 	}
 }
 
-// Choosing 播客 lists the podcasts opened here, and one opens its page: who
-// hosts it over its programs. Playing an episode remembers 播客, so the next
-// launch opens the podcast beside the column.
+// Choosing 播客 under 我的 lists the podcasts the listener follows, and one
+// opens its page: who hosts it over its programs. Playing an episode
+// remembers 播客, so the next launch opens the podcast beside the column.
 func TestPodcastsListAndOpen(t *testing.T) {
 	a := editTestApp()
 	a.homeLoading = true
@@ -524,7 +523,7 @@ func TestPodcastsListAndOpen(t *testing.T) {
 	tt.Advance(300 * time.Millisecond)
 	tt.Frame()
 	if _, ok := tt.Find("代码时间"); !ok {
-		t.Fatalf("播客 does not list the podcasts opened here")
+		t.Fatalf("播客 does not list the podcasts the listener follows")
 	}
 	if _, ok := tt.Find("通勤"); ok {
 		t.Error("播客 still lists the listener's playlists")

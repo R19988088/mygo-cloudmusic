@@ -92,20 +92,15 @@ type app struct {
 	albumSongs map[int64]*netease.AlbumSongs
 	loadingAl  map[int64]bool
 	alErr      map[int64]string
-	// The podcasts opened here, listed beside the categories before a
-	// search, the ones a search found, and the podcast whose page shows with
-	// its programs.
-	podcasts         []netease.Podcast
-	found            []netease.Podcast
-	podcastQuery     string
-	podcastBox       ui.Handle
-	podcastSearching bool
-	podcastErr       string
-	podcastInfo      map[int64]*netease.Podcast
-	podcastPrograms  map[int64][]netease.PodcastProgram
-	loadingPod       map[int64]bool
-	podErr           map[int64]string
-	trackList        ui.ListState
+	// The podcasts the listener follows, listed beside the categories, and
+	// the podcast whose page shows, with its programs.
+	podcasts        []netease.Podcast
+	podcastInfo     map[int64]*netease.Podcast
+	podcastPrograms map[int64][]netease.PodcastProgram
+	podLoaded       map[int64]bool
+	loadingPod      map[int64]bool
+	podErr          map[int64]string
+	trackList       ui.ListState
 	// Where the page, the sidebar's categories and its playlists are
 	// scrolled, kept while Now Playing covers them, unbuilt.
 	pageScroll ui.ScrollState
@@ -203,6 +198,7 @@ func Run() error {
 		loadingPl:   map[int64]bool{},
 		plErr:       map[int64]string{},
 		podcastInfo: map[int64]*netease.Podcast{},
+		podLoaded:   map[int64]bool{},
 		loadingPod:  map[int64]bool{},
 		podErr:      map[int64]string{},
 		lyricAt:     -1,

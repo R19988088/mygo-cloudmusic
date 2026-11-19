@@ -2,14 +2,10 @@ package netease
 
 import (
 	"fmt"
-	"net/url"
-	"strconv"
 )
 
-// The podcasts: search finds them by name, the web player's API tells what
-// one is, and the client's lists its programs. What the listener follows
-// with NetEase is not served any more: the sidebar keeps the ones opened
-// here instead.
+// The podcasts: what the listener follows answers on the web player's API,
+// as the albums they saved do, and the programs of one there too.
 
 // Podcast is a show of NetEase's: its cover, its name, who hosts it, and
 // how many programs it has.
@@ -29,17 +25,26 @@ type Podcast struct {
 
 func (p *Podcast) Host() string { return p.DJ.Nickname }
 
-// SearchPodcasts returns the podcasts whose names match, as the search
-// finds them: NetEase's catalog, not the listener's own.
-func SearchPodcasts(name string, limit int) ([]Podcast, error) {
+// SavedPodcasts returns the podcasts the listener follows.
+func SavedPodcasts(limit int) ([]Podcast, error) {
 	var res struct {
-		Result struct {
+		DJRadios []Podcast `json:"djRadios"`
+		Data     struct {
 			DJRadios []Podcast `json:"djRadios"`
-		} `json:"result"`
+			List     []Podcast `json:"list"`
+		} `json:"data"`
 	}
-	query := url.Values{"s": {name}, "type": {"1009"}, "limit": {strconv.Itoa(limit)}, "offset": {"0"}}
-	err := get("/api/cloudsearch/pc", query, &res)
-	return res.Result.DJRadios, err
+	data := map[string]any{"offset": "0", "limit": fmt.Sprint(limit), "total": "true"}
+	if err := weapiPost("/weapi/djradio/get/subed", data, &res); err != nil {
+		return nil, err
+	}
+	switch {
+	case len(res.DJRadios) > 0:
+		return res.DJRadios, nil
+	case len(res.Data.DJRadios) > 0:
+		return res.Data.DJRadios, nil
+	}
+	return res.Data.List, nil
 }
 
 // PodcastDetail returns the podcast id: its cover, its name, who hosts it,
@@ -48,7 +53,7 @@ func PodcastDetail(id int64) (*Podcast, error) {
 	var res struct {
 		Data Podcast `json:"data"`
 	}
-	if err := weapiPost("/weapi/djradio/v2/get", map[string]any{"id": strconv.FormatInt(id, 10)}, &res); err != nil {
+	if err := weapiPost("/weapi/djradio/v2/get", map[string]any{"id": fmt.Sprint(id)}, &res); err != nil {
 		return nil, err
 	}
 	if res.Data.ID == 0 {
@@ -76,15 +81,11 @@ type PodcastProgram struct {
 // first.
 func PodcastPrograms(radio int64, limit int) ([]PodcastProgram, error) {
 	var res struct {
-		Code     int              `json:"code"`
 		Programs []PodcastProgram `json:"programs"`
 	}
-	data := map[string]any{"radioId": strconv.FormatInt(radio, 10), "limit": limit, "offset": 0, "asc": false}
-	if err := eapiPost("/api/dj/program/byradio", data, &res); err != nil {
+	data := map[string]any{"radioId": fmt.Sprint(radio), "offset": "0", "limit": fmt.Sprint(limit), "asc": "false"}
+	if err := weapiPost("/weapi/dj/program/byradio", data, &res); err != nil {
 		return nil, err
-	}
-	if res.Code != 200 {
-		return nil, fmt.Errorf("netease: podcast programs: code %d", res.Code)
 	}
 	return res.Programs, nil
 }

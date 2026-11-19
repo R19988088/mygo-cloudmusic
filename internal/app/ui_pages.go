@@ -423,7 +423,12 @@ func (a *app) trackRows(c *ui.Context, tracks []netease.Track, covers bool, head
 					a.likeButton(c.Key("like"), tr, 15, p.muted)
 				}
 			})
-			ui.Text(c, clock(tr.Length())).FontSize(12.5).FontFeatures("tnum").TextColor(p.faint).Width(44).TextAlign(ui.End)
+			dur, durW := clock(tr.Length()), float32(44)
+			if a.route.page == pagePodcast {
+				// Programs last hours, and say so.
+				dur, durW = clockLong(tr.Length()), 58
+			}
+			ui.Text(c, dur).FontSize(12.5).FontFeatures("tnum").TextColor(p.faint).Width(durW).TextAlign(ui.End)
 		})
 		if row.Clicked() && tr.Playable() {
 			a.playFrom(tracks, i)

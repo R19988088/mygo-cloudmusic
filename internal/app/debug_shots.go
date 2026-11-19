@@ -143,6 +143,40 @@ func init() {
 				mygo.RunOnMain(mygo.App.Quit)
 				return
 			}
+			if os.Getenv("NM_SCENE") == "pod" {
+				// The column of podcasts, and the page of the first one, with
+				// the covers NetEase serves.
+				for range 60 {
+					var n int
+					mygo.RunOnMain(func() { n = len(a.podcasts) })
+					if n > 0 {
+						break
+					}
+					time.Sleep(250 * time.Millisecond)
+				}
+				step(0, func() {
+					a.mineShown, a.mineOn = minePodcasts, true
+					if len(a.podcasts) > 0 {
+						a.open(route{page: pagePodcast, podcast: a.podcasts[0].ID})
+					}
+				})
+				// Its programs come from NetEase: wait for them, and a moment
+				// for the covers to paint.
+				for range 80 {
+					var ready bool
+					mygo.RunOnMain(func() {
+						ready = len(a.podcasts) > 0 && a.podLoaded[a.podcasts[0].ID]
+					})
+					if ready {
+						break
+					}
+					time.Sleep(250 * time.Millisecond)
+				}
+				time.Sleep(time.Second)
+				shot("podcasts", a.win)
+				mygo.RunOnMain(mygo.App.Quit)
+				return
+			}
 			if os.Getenv("NM_SCENE") == "np" {
 				time.Sleep(5 * time.Second)
 				shot("q-home", a.win)

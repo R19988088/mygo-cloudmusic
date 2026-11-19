@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/egoist/mygo"
 )
 
 func TestQRLoginLive(t *testing.T) {
@@ -54,19 +56,32 @@ func TestSongDownloadURLLive(t *testing.T) {
 	t.Logf("%s %d bytes %s", st.Level, st.Size, st.Type)
 }
 
-// TestPodcastsLive checks the podcasts' chain: a search finds them, the
-// web player's API tells what one is, the client's lists its programs, and
-// the first program's song streams.
+// TestPodcastsLive checks the podcasts' chain: the web player's API lists
+// the ones the listener follows, the client's lists their programs, and
+// the latest program's song streams.
 func TestPodcastsLive(t *testing.T) {
 	if os.Getenv("LIVE") == "" {
 		t.Skip()
 	}
 	deviceOnce.Do(func() { deviceID = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123" })
-	found, err := SearchPodcasts("代码时间", 10)
-	if err != nil || len(found) == 0 {
-		t.Fatalf("%d podcasts, %v", len(found), err)
+	// The listener's session, out of the keychain: only theirs answers what
+	// they follow.
+	session, err := mygo.Secrets.Service("dev.egoist.cloudmusic").Get(sessionSecret)
+	if err != nil || len(session) == 0 {
+		t.Skip("no session")
 	}
-	first := &found[0]
+	var cookies []*http.Cookie
+	for _, part := range strings.Split(string(session), ";") {
+		if name, value, ok := strings.Cut(strings.TrimSpace(part), "="); ok {
+			cookies = append(cookies, &http.Cookie{Name: name, Value: value, Path: "/"})
+		}
+	}
+	httpClient.Jar.SetCookies(siteURL, cookies)
+	saved, err := SavedPodcasts(200)
+	if err != nil || len(saved) == 0 {
+		t.Fatalf("%d podcasts, %v", len(saved), err)
+	}
+	first := &saved[0]
 	if first.ID == 0 || first.Name == "" || first.PicURL == "" || first.Host() == "" {
 		t.Fatalf("first podcast %+v", first)
 	}
@@ -79,7 +94,7 @@ func TestPodcastsLive(t *testing.T) {
 		t.Fatalf("%d programs, %v", len(programs), err)
 	}
 	tr := programs[0].Track()
-	t.Logf("%s by %s: %d programs, latest %q, %v", pc.Name, pc.Host(), len(programs), tr.Name, tr.Length())
+	t.Logf("%d podcasts; %s by %s: %d programs, latest %q, %v", len(saved), pc.Name, pc.Host(), len(programs), tr.Name, tr.Length())
 	if !tr.Playable() || tr.ID == 0 {
 		t.Fatalf("latest program %+v", tr)
 	}

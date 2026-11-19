@@ -11,59 +11,28 @@ import (
 
 // What asks NetEase for the podcasts, which tests swap out.
 var (
-	findPodcasts = netease.SearchPodcasts
-	podcastOf    = netease.PodcastDetail
-	programsOf   = netease.PodcastPrograms
+	savedPodcasts = netease.SavedPodcasts
+	podcastOf     = netease.PodcastDetail
+	programsOf    = netease.PodcastPrograms
 )
 
-const (
-	// searchPodcastsLimit is how many podcasts a search lists.
-	searchPodcastsLimit = 30
-	// keptPodcasts is how many podcasts opened here the column keeps.
-	keptPodcasts = 8
-	// podcastProgramLimit is how many programs of a podcast load: the
-	// latest ones, which play from the top.
-	podcastProgramLimit = 100
-)
+// podcastProgramLimit is how many programs of a podcast load: the latest
+// ones, which play from the top.
+const podcastProgramLimit = 500
 
-// podcastList is the column of 播客: a field to search NetEase's podcasts
-// by name, over the ones the search found, or else the ones opened here
-// before, as a cover and its name. What the listener follows with NetEase
-// is no longer served: the app keeps its own.
+// podcastList lists the podcasts the listener follows, in the column beside
+// the categories: a cover and its name, under a heading, as the albums they
+// saved show.
 func (a *app) podcastList(c *ui.Context) {
 	p := a.pal
-	ui.Row(c.Key("播客")).Height(30).AlignItems(ui.Center).Padding(0, 4, 0, 6).Margin(8, 0, 0, 0).Children(func() {
-		ui.Text(c, "播客").FontSize(13).FontWeight(700).TextColor(p.muted).Grow(1).SingleLine()
+	ui.Row(c.Key("收藏的播客")).Height(30).AlignItems(ui.Center).Padding(0, 4, 0, 6).Margin(8, 0, 0, 0).Children(func() {
+		ui.Text(c, "收藏的播客").FontSize(13).FontWeight(700).TextColor(p.muted).Grow(1).SingleLine()
 	})
-	field := ui.Row(c).Height(28).PaddingX(8).Gap(6).Radius(8).AlignItems(ui.Center).Margin(0, 2, 0, 10).
-		Background(p.hover).Border(1, p.hairline)
-	field.Children(func() {
-		ui.Icon(c, iconSearch).Size(12, 12).TextColor(p.muted)
-		in := ui.TextInputBase(c.Key("podcast-search"), &a.podcastQuery).Bind(&a.podcastBox).Grow(1).
-			Placeholder("搜索播客").FontSize(12).Label("搜索播客")
-		if in.Submitted() {
-			a.searchPodcasts(strings.TrimSpace(a.podcastQuery))
-		}
-	})
-
-	if a.podcastSearching {
-		ui.Text(c, "正在搜索…").FontSize(12).TextColor(p.faint).Margin(2, 6, 4, 6)
-		return
+	if len(a.podcasts) == 0 {
+		ui.Text(c, "登录后，收藏的播客显示在这里").FontSize(12).TextColor(p.faint).MaxLines(3).LineHeight(1.5).Margin(2, 10, 4, 6)
 	}
-	list := a.podcasts
-	if len(a.found) > 0 {
-		list = a.found
-	}
-	if len(list) == 0 {
-		empty := a.podcastErr
-		if empty == "" {
-			empty = "搜索播客的名字吧：打开过的播客会列在这里"
-		}
-		ui.Text(c, empty).FontSize(12).TextColor(p.faint).MaxLines(4).LineHeight(1.5).Margin(2, 10, 4, 6)
-		return
-	}
-	for i := range list {
-		pc := &list[i]
+	for i := range a.podcasts {
+		pc := &a.podcasts[i]
 		selected := a.route.page == pagePodcast && a.route.podcast == pc.ID && !a.nowPlaying
 		b := ui.ButtonBase(c.Key(pc.ID)).Height(52).PaddingX(6).Gap(11).Radius(9).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false).Label(pc.Name)
 		switch {
@@ -86,9 +55,8 @@ func (a *app) podcastList(c *ui.Context) {
 // its programs, the latest first, which a click plays.
 func (a *app) podcastPage(c *ui.Context) {
 	id := a.route.podcast
-	programs := a.podcastPrograms[id]
 	pc := a.podcastInfo[id]
-	if pc == nil {
+	if pc == nil || !a.podLoaded[id] {
 		if !a.loadingPod[id] {
 			a.centered(c, a.podErr[id], func() { a.loadPodcast(id) })
 			return
@@ -97,7 +65,9 @@ func (a *app) podcastPage(c *ui.Context) {
 		a.trackSkeleton(c, s, false, func(c *ui.Context) { a.playlistHeaderSkeleton(c, s) })
 		return
 	}
-	a.trackRows(c, netease.PodcastTracks(programs), true, func(c *ui.Context) { a.podcastHeader(c, pc, programs) })
+	a.trackRows(c, netease.PodcastTracks(a.podcastPrograms[id]), true, func(c *ui.Context) {
+		a.podcastHeader(c, pc, a.podcastPrograms[id])
+	})
 }
 
 // podcastHeader is the podcast's cover over who hosts it, how many programs
@@ -142,26 +112,14 @@ func (a *app) podcastHeader(c *ui.Context, pc *netease.Podcast, programs []netea
 	})
 }
 
-// searchPodcasts lists the podcasts whose names match query, in the column,
-// in place of the ones opened here.
-func (a *app) searchPodcasts(query string) {
-	if query == "" {
-		a.found, a.podcastErr = nil, ""
-		return
-	}
-	a.podcastSearching = true
-	a.podcastErr = ""
+// loadPodcasts loads the podcasts the listener follows, for the column, on
+// signing in.
+func (a *app) loadPodcasts() {
 	go func() {
-		list, err := findPodcasts(query, searchPodcastsLimit)
+		list, err := savedPodcasts(200)
 		a.post(func() {
-			a.podcastSearching = false
-			if err != nil {
-				a.podcastErr, a.found = "搜索播客失败", nil
-				return
-			}
-			a.found = list
-			if len(list) == 0 {
-				a.podcastErr = "没有找到相关播客"
+			if err == nil {
+				a.podcasts = list
 			}
 		})
 	}()
@@ -170,16 +128,26 @@ func (a *app) searchPodcasts(query string) {
 // loadPodcast loads the podcast id, with its programs, unless it is loaded
 // or loading: what its page shows.
 func (a *app) loadPodcast(id int64) {
-	if a.loadingPod[id] || a.podcastInfo[id] != nil {
+	if a.loadingPod[id] || a.podLoaded[id] {
 		return
 	}
-	if a.loadingPod == nil {
-		a.loadingPod, a.podErr = map[int64]bool{}, map[int64]string{}
-	}
+	a.initPods()
 	a.loadingPod[id] = true
 	delete(a.podErr, id)
+	// The podcast itself: the column's, if it lists it, or the web player's.
+	var known *netease.Podcast
+	for i := range a.podcasts {
+		if a.podcasts[i].ID == id {
+			pc := a.podcasts[i]
+			known = &pc
+			break
+		}
+	}
 	go func() {
-		pc, err := podcastOf(id)
+		pc, err := known, error(nil)
+		if pc == nil {
+			pc, err = podcastOf(id)
+		}
 		var programs []netease.PodcastProgram
 		if err == nil {
 			programs, err = programsOf(id, podcastProgramLimit)
@@ -190,71 +158,27 @@ func (a *app) loadPodcast(id int64) {
 				a.podErr[id] = "播客加载失败"
 				return
 			}
-			if a.podcastInfo == nil {
-				a.podcastInfo = map[int64]*netease.Podcast{}
-			}
-			if a.podcastPrograms == nil {
-				a.podcastPrograms = map[int64][]netease.PodcastProgram{}
-			}
 			a.podcastInfo[id], a.podcastPrograms[id] = pc, programs
-			a.keepPodcast(pc)
+			a.podLoaded[id] = true
 		})
 	}()
 }
 
-// loadKeptPodcasts loads what the podcasts opened here are, as the column
-// lists them beside the categories before a search.
-func (a *app) loadKeptPodcasts() {
-	ids := a.settings.Podcasts
-	if len(ids) == 0 {
-		return
-	}
-	go func() {
-		var found []*netease.Podcast
-		for _, id := range ids {
-			if pc, err := podcastOf(id); err == nil {
-				found = append(found, pc)
-			}
-		}
-		a.post(func() {
-			if a.podcastInfo == nil {
-				a.podcastInfo = map[int64]*netease.Podcast{}
-			}
-			for _, pc := range found {
-				a.podcastInfo[pc.ID] = pc
-			}
-			a.listKeptPodcasts()
-		})
-	}()
-}
-
-// keepPodcast remembers the podcast opened, the newest first, and lists it
-// beside the categories: the app's own followings, as NetEase serves none.
-func (a *app) keepPodcast(pc *netease.Podcast) {
-	ids := []int64{pc.ID}
-	for _, id := range a.settings.Podcasts {
-		if id != pc.ID {
-			ids = append(ids, id)
-		}
-	}
-	if len(ids) > keptPodcasts {
-		ids = ids[:keptPodcasts]
-	}
+// initPods makes the maps the podcasts' pages keep, if they are not yet.
+func (a *app) initPods() {
 	if a.podcastInfo == nil {
 		a.podcastInfo = map[int64]*netease.Podcast{}
 	}
-	a.podcastInfo[pc.ID] = pc
-	a.settings.Podcasts = ids
-	a.settings.save()
-	a.listKeptPodcasts()
-}
-
-// listKeptPodcasts lists the podcasts the settings kept, in their order.
-func (a *app) listKeptPodcasts() {
-	a.podcasts = a.podcasts[:0]
-	for _, id := range a.settings.Podcasts {
-		if pc := a.podcastInfo[id]; pc != nil {
-			a.podcasts = append(a.podcasts, *pc)
-		}
+	if a.podcastPrograms == nil {
+		a.podcastPrograms = map[int64][]netease.PodcastProgram{}
+	}
+	if a.podLoaded == nil {
+		a.podLoaded = map[int64]bool{}
+	}
+	if a.loadingPod == nil {
+		a.loadingPod = map[int64]bool{}
+	}
+	if a.podErr == nil {
+		a.podErr = map[int64]string{}
 	}
 }

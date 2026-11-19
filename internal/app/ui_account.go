@@ -52,15 +52,18 @@ func (a *app) signedIn(prof *netease.Profile) {
 	a.restoreSession()
 	a.mine, a.saved, a.recPlaylists, a.liked = nil, nil, nil, nil
 	a.albums = nil
-	a.found = nil
+	a.podcasts = nil
 	// What the listener may play changed: load the lists again.
 	a.playlists = map[int64]*netease.Playlist{}
 	a.plErr = map[int64]string{}
 	a.albumSongs = map[int64]*netease.AlbumSongs{}
 	a.loadingAl = map[int64]bool{}
 	a.alErr = map[int64]string{}
-	// The podcasts opened here are the app's own, whatever the session.
-	a.loadKeptPodcasts()
+	a.podcastInfo = map[int64]*netease.Podcast{}
+	a.podcastPrograms = map[int64][]netease.PodcastProgram{}
+	a.podLoaded = map[int64]bool{}
+	a.loadingPod = map[int64]bool{}
+	a.podErr = map[int64]string{}
 	if a.route.page == pagePlaylist {
 		a.loadPlaylist(a.route.playlist, false)
 	}
@@ -79,7 +82,8 @@ func (a *app) signedIn(prof *netease.Profile) {
 		// nobody signed in: the home page instead of the error it would
 		// show.
 		if a.route.page == pagePlaylist && a.route.playlist == a.settings.SidePlaylist ||
-			a.route.page == pageAlbum && a.route.album == a.settings.SidePlaylist {
+			a.route.page == pageAlbum && a.route.album == a.settings.SidePlaylist ||
+			a.route.page == pagePodcast && a.route.podcast == a.settings.SidePlaylist {
 			a.show(route{page: pageHome})
 		}
 		return
@@ -87,6 +91,7 @@ func (a *app) signedIn(prof *netease.Profile) {
 	a.loadLiked(prof.UserID)
 	a.loadMine(prof.UserID)
 	a.loadAlbums(prof.UserID)
+	a.loadPodcasts()
 }
 
 func (a *app) openLogin() {

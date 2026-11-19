@@ -203,6 +203,16 @@ func clock(d time.Duration) string {
 	return fmt.Sprintf("%d:%02d", s/60, s%60)
 }
 
+// clockLong is clock once a duration lasts an hour, for a podcast's programs:
+// hours, minutes and seconds.
+func clockLong(d time.Duration) string {
+	s := int(max(d, 0).Round(time.Second) / time.Second)
+	if s < 3600 {
+		return clock(d)
+	}
+	return fmt.Sprintf("%d:%02d:%02d", s/3600, s/60%60, s%60)
+}
+
 // plays formats a play count as people in China read it.
 func plays(n float64) string {
 	switch {
