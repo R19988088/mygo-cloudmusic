@@ -19,6 +19,11 @@ const (
 	navWidth      = 188
 	playlistWidth = 224
 	sidebarWidth  = navWidth + playlistWidth
+	// playlistFoot is the room the column of playlists keeps under its last
+	// row, and edgeFeather how far a soft scroll edge fades past what it
+	// hangs under.
+	playlistFoot = 8
+	edgeFeather  = 10
 )
 
 func (a *app) view(c *ui.Context) {
@@ -268,7 +273,10 @@ func (a *app) playlistColumn(c *ui.Context) {
 	w = min(max(w, 0), playlistWidth)
 	a.plW = w
 	col.Width(w)
-	if runtime.GOOS != "darwin" || !c.Vibrancy() || p.pl.bgSet {
+	// Over the window's material the column lays no color of its own, and a
+	// fade of one would show there as a band.
+	painted := runtime.GOOS != "darwin" || !c.Vibrancy() || p.pl.bgSet
+	if painted {
 		// The listener's color for it, or else one a little lighter than the
 		// categories beside it, as the playlists of Music are.
 		col.Background(p.plBg())
@@ -284,11 +292,28 @@ func (a *app) playlistColumn(c *ui.Context) {
 	// The border comes as it opens, and the padding sits in a column within.
 	col.BorderWidth(0, 0, 0, 1).BorderColor(p.hairline.Alpha(min(w/24, 1)))
 	col.Children(func() {
-		ui.Column(c).Fill().Padding(columnsTop(c), 8, 8, 8).Children(func() {
-			ui.Scroll(c.Key("playlists")).TrackScroll(&a.plScroll).Grow(1).Margin(0, -6).Padding(0, 6).Gap(4).Children(func() {
+		// The room above the heading is inside the scroll, not around it: the
+		// list runs the column's own height, so what scrolls out of view leaves
+		// by its edges rather than being cut within a band of padding.
+		ui.Column(c).Fill().PaddingX(8).Children(func() {
+			ui.Scroll(c.Key("playlists")).TrackScroll(&a.plScroll).Grow(1).Margin(0, -6).
+				Padding(columnsTop(c), 6, playlistFoot, 6).Gap(4).Children(func() {
 				a.mineList(c)
 			})
 		})
+		// And at its edges the list fades, as a page's does under its bar,
+		// rather than showing a row sliced in two: the fade comes while there
+		// is more above or below.
+		if painted {
+			top := ui.Box(c.Key("playlists-top")).Absolute().Top(0).Left(0).Right(0).
+				Height(columnsTop(c) + edgeFeather).PassThrough().
+				Material(glass.ScrollEdge{Background: p.plBg()})
+			top.Opacity(edgeShown(top, a.plScroll.Y > 0.5))
+			bottom := ui.Box(c.Key("playlists-bottom")).Absolute().Bottom(0).Left(0).Right(0).
+				Height(playlistFoot + edgeFeather).PassThrough().
+				Material(glass.ScrollEdge{Bottom: true, Background: p.plBg()})
+			bottom.Opacity(edgeShown(bottom, a.plScroll.MaxY-a.plScroll.Y > 0.5))
+		}
 	})
 }
 

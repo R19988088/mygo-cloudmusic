@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -351,6 +352,33 @@ func TestPlaylistColumnFollowsTheChoice(t *testing.T) {
 	}
 	if a.route.page != pagePlaylist || a.route.playlist != 11 {
 		t.Errorf("opening 睡前 went to %+v", a.route)
+	}
+}
+
+// The column of playlists runs the window's own height, so the wheel scrolls
+// it under the fades at its edges to a last row left whole above its foot.
+func TestPlaylistColumnScrollsToItsFoot(t *testing.T) {
+	a := editTestApp()
+	for i := range 12 {
+		a.mine = append(a.mine, netease.Playlist{ID: int64(100 + i), Name: fmt.Sprintf("歌单 %d", i)})
+	}
+	tt := ui.NewTester(a.view, 1200, 600)
+	tt.Frame()
+	// The fades over its edges let the wheel reach the list below them.
+	tt.Move(300, 200)
+	tt.Scroll(300, 200, 0, 400)
+	tt.Frame()
+	if a.plScroll.MaxY == 0 || a.plScroll.Y != a.plScroll.MaxY {
+		t.Fatalf("the column scrolled to %v of %v", a.plScroll.Y, a.plScroll.MaxY)
+	}
+	// Its end is whole: the last row stops at the foot of the column, not
+	// sliced by the edge above it.
+	r, ok := tt.Find("歌单 11")
+	if !ok {
+		t.Fatal("歌单 11 is not listed")
+	}
+	if bottom := r.Y + r.H; bottom > 600-playlistFoot || bottom < 600-playlistFoot-1 {
+		t.Errorf("the last row ends at %v, want the column's foot at %v", bottom, 600-playlistFoot)
 	}
 }
 
