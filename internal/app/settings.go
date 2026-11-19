@@ -57,6 +57,13 @@ type settings struct {
 	// SidePlaylist is the playlist that list held the last song played in,
 	// whose page shows beside the column on the next launch.
 	SidePlaylist int64 `json:"sidePlaylist"`
+	// WindowWidth and WindowHeight are how big the window was left, and
+	// WindowX and WindowY where, for the next launch; 0 for the size it
+	// opens at, in the middle of the display.
+	WindowX      int `json:"windowX"`
+	WindowY      int `json:"windowY"`
+	WindowWidth  int `json:"windowWidth"`
+	WindowHeight int `json:"windowHeight"`
 
 	path string // where they were loaded from, and are saved to
 }

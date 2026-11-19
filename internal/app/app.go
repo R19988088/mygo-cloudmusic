@@ -64,6 +64,7 @@ type app struct {
 	mineShown  mineKind
 	mineOn     bool
 	plW        float32        // how wide that column is, as it last laid out
+	sizeDue    bool           // the window's size is written soon
 	naming     nameDialog     // the name of a playlist asked for
 	deleting   deleteDialog   // whether to delete a playlist, asked
 	liked      map[int64]bool // the songs the listener likes
@@ -201,13 +202,18 @@ func Run() error {
 		a.pl.Changed = a.keepSession
 		a.volume = a.settings.Volume
 		a.pl.SetVolume(a.volume)
+		b := a.place()
 		a.win = mygo.NewWindow(mygo.WindowOptions{
-			Title:         mygo.App.Name(),
-			Width:         1180,
-			Height:        780,
-			MinWidth:      880,
-			MinHeight:     580,
-			StateKey:      "main",
+			Title:     mygo.App.Name(),
+			X:         b.X,
+			Y:         b.Y,
+			Width:     b.Width,
+			Height:    b.Height,
+			MinWidth:  880,
+			MinHeight: 580,
+			// No StateKey: the framework keeps the window's bounds when it
+			// closes, and this app hides to the notification area instead,
+			// so its bounds are the settings' (noteSize).
 			TitleBarStyle: mygo.TitleBarHidden,
 			// As tall as the edge over a page (Linux, Windows).
 			TitleBarHeight: buttonsHeight,
@@ -219,6 +225,11 @@ func Run() error {
 			Content:              ui.View(a.view),
 		})
 		a.setMenu()
+		// How big it was left, kept a moment after it stops changing: the
+		// window hides to the notification area rather than closing, and
+		// what closes is the app, which may be ended without a word.
+		a.win.OnResize(a.noteSize)
+		a.win.OnMove(a.noteSize)
 		a.boot()
 		// The notch player is macOS's, over its menu bar: elsewhere it would
 		// hang at the top of the screen as a black box.
@@ -240,6 +251,7 @@ func Run() error {
 			if a.quitting {
 				return
 			}
+			a.saveSize()
 			e.PreventDefault()
 			if runtime.GOOS == "darwin" || (a.tray != nil && a.tray.ok) {
 				a.win.Hide()
@@ -253,6 +265,7 @@ func Run() error {
 		if a.tray != nil {
 			a.tray.remove()
 		}
+		a.saveSize()
 		a.settings.Volume = a.volume
 		a.settings.save()
 		a.saveSession()
@@ -260,4 +273,82 @@ func Run() error {
 	mygo.App.OnWindowAllClosed(func() {})
 	mygo.App.OnActivate(func(bool) { a.showMain() })
 	return mygo.App.Run()
+}
+
+// The size the window opens at, before the listener has left it any other.
+const (
+	windowWidth  = 1180
+	windowHeight = 780
+)
+
+// windowBounds is where and how big the window opens: 0, 0 for the middle
+// of its display.
+type windowBounds struct {
+	X, Y, Width, Height int
+}
+
+// place returns the bounds the window opens at: what the settings kept of
+// the last window, if enough of it would show on a display; else its size,
+// in the middle of one, as its place went with a display that is gone.
+func (a *app) place() windowBounds {
+	b := windowBounds{Width: windowWidth, Height: windowHeight}
+	if a.settings.WindowWidth < 880 || a.settings.WindowHeight < 580 {
+		return b
+	}
+	b.Width, b.Height = a.settings.WindowWidth, a.settings.WindowHeight
+	x, y := a.settings.WindowX, a.settings.WindowY
+	for _, d := range displays() {
+		area := d.WorkArea
+		w := min(area.X+area.Width, x+b.Width) - max(area.X, x)
+		h := min(area.Y+area.Height, y+b.Height) - max(area.Y, y)
+		if w >= min(100, b.Width) && h >= min(50, b.Height) {
+			b.X, b.Y = x, y
+			return b
+		}
+	}
+	return b
+}
+
+// displays is the displays a kept place is checked against.
+var displays = func() []mygo.Display { return mygo.Screen.Displays() }
+
+// sizeDelay is how long the window's bounds must stay unchanged to be kept.
+const sizeDelay = 400 * time.Millisecond
+
+// noteSize keeps where and how big the window is a moment after it stops
+// changing, so a drag of its edge does not write the settings on every
+// frame.
+func (a *app) noteSize() {
+	if a.sizeDue {
+		return
+	}
+	a.sizeDue = true
+	sizeAfter(sizeDelay, func() {
+		a.sizeDue = false
+		a.saveSize()
+	})
+}
+
+// sizeAfter runs fn on the main thread after d, without redrawing a window.
+var sizeAfter = func(d time.Duration, fn func()) {
+	time.AfterFunc(d, func() { mygo.RunOnMain(fn) })
+}
+
+// saveSize keeps the bounds the window has now, unless it is maximized or
+// minimized, whose bounds are not the ones to open at.
+func (a *app) saveSize() {
+	if a.win == nil || a.win.IsMaximized() || a.win.IsMinimized() {
+		return
+	}
+	b := a.win.Bounds()
+	if b.Width < 880 || b.Height < 580 {
+		return
+	}
+	if a.settings.WindowX == b.X && a.settings.WindowY == b.Y &&
+		a.settings.WindowWidth == b.Width && a.settings.WindowHeight == b.Height {
+		return
+	}
+	a.settings.WindowX, a.settings.WindowY = b.X, b.Y
+	a.settings.WindowWidth, a.settings.WindowHeight = b.Width, b.Height
+	a.settings.save()
 }
