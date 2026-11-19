@@ -30,6 +30,9 @@ type Player struct {
 	// Normalize reports whether to even out the loudness of tracks, as
 	// the settings say.
 	Normalize func() bool
+	// Effect is the sound effect put over what plays, nil for none: the
+	// listener picks one in the player bar.
+	Effect *Effect
 	// Cache keeps the songs played, if set.
 	Cache *Cache
 	// Changed, if set, hears that what plays, where it is or whether it
@@ -57,6 +60,8 @@ type Player struct {
 	info    *netease.Stream // what the current track streams
 	fade    fader
 	gain    float64 // the current track's normalizing gain
+	// effect is the chain over what plays, the song's decoder wrapped in it.
+	effect *effectChain
 	loading bool
 	playing bool // what the listener wants: false while paused
 	err     string
@@ -490,6 +495,15 @@ func (p *Player) SetVolume(v float64) {
 	p.applyGain()
 }
 
+// SetEffect puts the effect e over what plays, from the next buffer on, and
+// over the songs after it: nil takes it off. The song keeps its place.
+func (p *Player) SetEffect(e *Effect) {
+	p.Effect = e
+	if p.effect != nil {
+		p.effect.set(e)
+	}
+}
+
 // applyGain sets the volume of what plays: the listener's, which the ear
 // hears in powers, and the track's gain, if normalizing.
 func (p *Player) applyGain() {
@@ -638,7 +652,13 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 			}
 			p.stream, p.info = s, info
 			p.gain = normGain(info)
-			p.out = audio.NewPlayer(s)
+			// The effect goes over the samples as they decode, between the
+			// song and the device. The chain is always there, so a preset
+			// picked mid-song takes effect at once; with no effect it passes
+			// the samples through.
+			p.effect = newEffectChain(s, p.Effect)
+			dec := audio.Decoder(p.effect)
+			p.out = audio.NewPlayer(dec)
 			// From its middle, as a session picked up again, it fades in.
 			level := 1.0
 			if p.pending > 0 {

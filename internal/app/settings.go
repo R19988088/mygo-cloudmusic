@@ -63,6 +63,11 @@ type settings struct {
 	// CacheMB is how many megabytes the songs kept on disk may take; 0
 	// keeps none.
 	CacheMB int `json:"cacheMB"`
+	// EffectsOn turns the sound effect on, and Effect is the one it plays,
+	// as the listener picked it in the player bar's effects popover: "无"
+	// while they picked none.
+	EffectsOn bool   `json:"effectsOn"`
+	Effect    string `json:"effect"`
 	// SideMine is the list of 我的 the column of playlists beside the
 	// categories showed for the last song played: the listener's playlists
 	// (playlists), their saved ones (saved), the albums they saved (albums),

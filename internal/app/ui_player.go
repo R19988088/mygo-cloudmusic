@@ -417,18 +417,16 @@ func (a *app) playerBar(c *ui.Context) {
 			})
 		})
 
-		// Lyrics and volume.
+		// Lyrics, effects and volume.
 		ui.Row(c).Grow(1).Basis(0).MinWidth(controls).Justify(ui.End).AlignItems(ui.Center).Gap(4).Children(func() {
 			lyr := p.muted
 			if a.nowPlaying {
 				lyr = p.accent
 			}
-			if iconButton(c.Key("lyrics"), iconLyrics, 16, lyr, "歌词").Clicked() && tr != nil {
+			if iconButton(c.Key("lyrics"), iconQueue, 16, lyr, "歌词").Clicked() && tr != nil {
 				a.nowPlaying, a.npPane = true, a.lyricsPaneChosen()
 			}
-			if iconButton(c.Key("queue"), iconQueue, 16, p.muted, "播放队列").Clicked() && tr != nil {
-				a.nowPlaying, a.npPane = true, paneQueue
-			}
+			a.effectsButton(c, p.muted)
 			a.volumeButton(c, p.text.Alpha(0.75))
 		})
 	})

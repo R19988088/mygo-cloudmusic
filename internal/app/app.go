@@ -145,6 +145,7 @@ type app struct {
 	scrubbing  bool
 	volume     float64
 	volumeOpen bool // the volume popover of the player bar shows
+	fxOpen     bool // the effects popover of the player bar shows
 	mutedFrom  float64
 
 	rowBars barState
@@ -230,6 +231,7 @@ func Run() error {
 		a.pl = player.New(a.post)
 		a.pl.Quality = func() string { return a.settings.Quality }
 		a.pl.Normalize = func() bool { return a.settings.Normalize }
+		a.applyEffect()
 		a.pl.Cache = newSongCache(a.settings.CacheMB)
 		a.pl.Changed = a.keepSession
 		a.volume = a.settings.Volume
