@@ -6,3 +6,16 @@
 14:31:47.328 [12412] ] "'webkitRequestAnimationFrame' is vendor-specific. Please use the standard 'requestAnimationFrame' instead.", source:  (0)
 14:31:50.109 [12412] create http  source:0!
 14:31:53.000 [28052] ] Running without renderer sandbox
+14:33:30.721 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\d992fd19-0b25-4fac-887a-df212aeb2169:
+14:33:30.721 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\2fbb054b-dec7-479c-9563-0f75b39f2960:
+14:33:30.721 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\9b458fe2-16c9-47b9-b30c-990427634f8d:
+14:33:30.721 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\07a6f8e4-2ec1-4b18-b421-7ed1a12b1b4e:
+14:33:30.721 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\8f8c9fa2-1cb9-48b3-9f73-2c180e047416:
+14:33:30.721 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\e99da2a2-7c12-4223-a691-afc4af146da1:
+14:33:30.721 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\b4bf4a1d-7c41-4cf7-b414-c29b36dfc441:
+14:33:30.722 [16496] \AppData\Roaming\quark-cloud-drive\Crashpad\attachments\ad0d584e-aac8-45e1-b46f-2ab21fc13a24:
+14:34:20.783 [12412] clean http source:0!
+14:34:20.788 [12412] create http  source:0!
+14:37:21.196 [12412] clean http source:0!
+14:37:21.200 [12412] create http  source:0!
+14:38:01.175 [27768] ] Running without renderer sandbox

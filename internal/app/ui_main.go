@@ -230,7 +230,6 @@ func (a *app) navColumn(c *ui.Context) {
 		})
 
 		ui.Scroll(c.Key("nav")).TrackScroll(&a.navScroll).Grow(1).Margin(0, -6).Padding(0, 6).Gap(2).Children(func() {
-			a.navHeader(c, "浏览")
 			a.navItem(c, iconHome, "为你推荐", route{page: pageHome})
 			a.navItem(c, iconDaily, "每日推荐", route{page: pageDaily})
 			a.navItem(c, iconRadio, "私人 FM", route{page: pageFM})
@@ -292,12 +291,6 @@ func (a *app) playlistColumn(c *ui.Context) {
 	})
 }
 
-// navHeader is the heading of a group of the categories, as the headings
-// of Library in Music.
-func (a *app) navHeader(c *ui.Context, title string) {
-	ui.Text(c, title).FontSize(11.5).FontWeight(600).TextColor(a.pal.words(a.pal.nav).faint).Margin(8, 4, 3, 6)
-}
-
 // navGroup is the heading of a group of entries which folds away and out
 // again, its arrow turning as it does, as the headings of Library hold
 // theirs in Music.
@@ -308,7 +301,10 @@ func (a *app) navGroup(c *ui.Context, title string, closed *bool, fn func()) {
 		b.Background(p.hover)
 	}
 	b.Children(func() {
-		ui.Text(c, title).FontSize(11.5).FontWeight(600).TextColor(p.words(p.nav).faint).SingleLine()
+		// The heading writes as the search field does: the column's color,
+		// at 80%.
+		t := p.words(p.nav).text.Alpha(0.8)
+		ui.Text(c, title).FontSize(11.5).FontWeight(600).TextColor(t).SingleLine()
 		// Closed, the arrow points at the entries it hides, as a chevron
 		// of the sidebar's headings does.
 		turn := float32(-90)
@@ -316,7 +312,7 @@ func (a *app) navGroup(c *ui.Context, title string, closed *bool, fn func()) {
 			turn = 0
 		}
 		ui.Icon(c, iconDown).Size(10, 10).Rotate(b.AnimateTo("turn", turn, ui.Animation{Duration: 150 * time.Millisecond})).
-			TextColor(p.words(p.nav).faint)
+			TextColor(t)
 	})
 	if b.Clicked() {
 		*closed = !*closed
