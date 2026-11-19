@@ -347,7 +347,38 @@ func TestSegmentedFrames(t *testing.T) {
 	}
 }
 
-// ⌘D likes the song playing, and again unlikes it, saying so in a toast.
+// With NM_FRAMES set, saves the colors of the settings with the picker of
+// 主栏底色 open, light and dark: the sheet scrolls, and the picker must not
+// be clipped by it.
+func TestColorWellFrames(t *testing.T) {
+	dir := os.Getenv("NM_FRAMES")
+	if dir == "" {
+		t.Skip()
+	}
+	for _, dark := range []bool{false, true} {
+		a := newTestApp()
+		a.settings = defaultSettings()
+		a.settings.MainColor = "#eef3f8"
+		tt := ui.NewTester(a.settingsView, 560, 900)
+		tt.SetDark(dark)
+		tt.Frame()
+		desc, ok := tt.Find("页面与播放器下的底色；「默认」跟随外观")
+		if !ok {
+			t.Fatal("no row for the page's color")
+		}
+		// The well sits left of the button at the row's end.
+		tt.ClickAt(560-28-16-56-6-14, desc.Y+desc.H/2)
+		tt.Frame()
+		name := "colors-light.png"
+		if dark {
+			name = "colors-dark.png"
+		}
+		f, _ := os.Create(filepath.Join(dir, name))
+		png.Encode(f, tt.Image())
+		f.Close()
+	}
+}
+
 func TestLikeCurrent(t *testing.T) {
 	likeSong = func(int64, bool) error { return nil }
 	defer func() { likeSong = netease.Like }()

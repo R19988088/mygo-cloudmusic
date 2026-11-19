@@ -24,6 +24,22 @@ type palette struct {
 	accent    ui.Color
 	onAccent  ui.Color
 	cardShade ui.Color
+	// icon is the color of the categories' icons where the listener chose
+	// one, which iconSet says they did.
+	icon    ui.Color
+	iconSet bool
+}
+
+// navIcon returns the color of the categories' icons: the listener's where
+// they chose one, else the appearance's.
+func (p palette) navIcon(selected bool) ui.Color {
+	if p.iconSet {
+		return p.icon
+	}
+	if selected {
+		return p.text
+	}
+	return p.muted
 }
 
 func paletteFor(t *ui.Theme) palette {

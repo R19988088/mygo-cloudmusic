@@ -2,10 +2,13 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
 )
 
 // settings are the listener's choices, kept in settings.json in the user
@@ -28,6 +31,11 @@ type settings struct {
 	Quality string `json:"quality"`
 	// Appearance is light, dark, or system to follow the system.
 	Appearance string `json:"appearance"`
+	// MainColor is the color of the pages as #rrggbb, and IconColor the color
+	// of the categories' icons: the listener's own, where they chose them.
+	// Empty follows the appearance.
+	MainColor string `json:"mainColor"`
+	IconColor string `json:"iconColor"`
 	// Smoke makes the progress bars comets trailing smoke as music plays,
 	// for a few percent of a core: the listener turns it on.
 	Smoke bool `json:"smoke"`
@@ -173,6 +181,37 @@ func (s settings) applyAppearance() {
 	default:
 		mygo.Theme.SetSource(mygo.ThemeSystem)
 	}
+}
+
+// colors puts the colors the listener chose over the appearance's.
+func (s settings) colors(p *palette) {
+	if c, ok := colorOf(s.MainColor); ok {
+		p.bg = c
+	}
+	if c, ok := colorOf(s.IconColor); ok {
+		p.icon, p.iconSet = c, true
+	}
+}
+
+// colorOf returns the color named as hex, and whether it names one: one that
+// does not parse, as a file edited by hand, follows the appearance rather
+// than the panic ui.Hex makes of it.
+func colorOf(hex string) (ui.Color, bool) {
+	h := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(hex), "#"))
+	if len(h) != 3 && len(h) != 4 && len(h) != 6 && len(h) != 8 {
+		return ui.Color{}, false
+	}
+	for i := range len(h) {
+		if c := h[i]; !('0' <= c && c <= '9' || 'a' <= c && c <= 'f') {
+			return ui.Color{}, false
+		}
+	}
+	return ui.Hex(h), true
+}
+
+// hexOf is the color named as the settings keep one, #rrggbb.
+func hexOf(c ui.Color) string {
+	return fmt.Sprintf("#%02x%02x%02x", c.R, c.G, c.B)
 }
 
 // qualityLevel is the stream level NetEase names a quality by.

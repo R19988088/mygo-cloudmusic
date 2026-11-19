@@ -24,6 +24,7 @@ const (
 func (a *app) view(c *ui.Context) {
 	t := *c.Theme()
 	a.pal = paletteFor(&t)
+	a.settings.colors(&a.pal)
 	p := a.pal
 	t.Accent, t.AccentText = p.accent, p.onAccent
 	t.Selection = p.accent.Alpha(0.3)
@@ -198,7 +199,7 @@ func (a *app) navColumn(c *ui.Context) {
 			field.Background(p.hover).Border(1, p.hairline)
 		}
 		field.Children(func() {
-			ui.Icon(c, iconSearch).Size(13, 13).TextColor(p.muted)
+			ui.Icon(c, iconSearch).Size(13, 13).TextColor(p.navIcon(false))
 			in := ui.TextInputBase(c.Key("search"), &a.query).Bind(&a.searchBox).Grow(1).
 				Placeholder("搜索歌曲、歌手").FontSize(12.5).Label("搜索")
 			if in.Submitted() && strings.TrimSpace(a.query) != "" {
@@ -223,11 +224,8 @@ func (a *app) navColumn(c *ui.Context) {
 			})
 		})
 
-		// What plays, as a card at the foot of the categories, over who
-		// listens: they stay while the playlists' column comes and goes.
-		if tr := a.pl.Current(); tr != nil {
-			a.sidebarNowPlaying(c, tr)
-		}
+		// Who listens sits at the foot of the categories, where they stay as
+		// the playlists' column comes and goes.
 		a.accountRow(c)
 	})
 }
@@ -325,10 +323,7 @@ func (a *app) mineItem(c *ui.Context, icon *ui.SVG, label string, kind mineKind)
 		bg = p.hover
 	}
 	b.Background(b.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
-	iconColor := p.muted
-	if selected {
-		iconColor = p.text
-	}
+	iconColor := p.navIcon(selected)
 	b.Children(func() {
 		ui.Icon(c, icon).Size(16, 16).TextColor(iconColor)
 		ui.Text(c, label).FontSize(13).FontWeight(500).TextColor(p.text)
@@ -425,10 +420,7 @@ func (a *app) navItem(c *ui.Context, icon *ui.SVG, label string, r route) {
 		bg = p.hover
 	}
 	b.Background(b.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
-	iconColor := p.muted
-	if selected {
-		iconColor = p.text
-	}
+	iconColor := p.navIcon(selected)
 	b.Children(func() {
 		ui.Icon(c, icon).Size(17, 17).TextColor(iconColor)
 		ui.Text(c, label).FontSize(13).FontWeight(500).TextColor(p.text)
@@ -571,28 +563,6 @@ func (k mineKind) pick() string {
 		return "选一个播客"
 	}
 	return "选一个歌单"
-}
-
-// sidebarNowPlaying is the card at the foot of the categories: the cover of
-// what plays and its name, which opens Now Playing.
-func (a *app) sidebarNowPlaying(c *ui.Context, tr *netease.Track) {
-	p := a.pal
-	card := ui.ButtonBase(c.Key("np-card")).Gap(10).Padding(8).Radius(12).AlignItems(ui.Center).FocusRing(false).Label("正在播放")
-	bg := p.hover
-	if card.Hovered() {
-		bg = p.press
-	}
-	card.Background(card.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
-	card.Children(func() {
-		a.cover(c, tr.Album.PicURL, 96, 40, 6).Shadow(0, 2, 6, 0, p.cardShade)
-		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(2).Children(func() {
-			ui.Text(c, tr.Name).FontSize(12.5).FontWeight(600).SingleLine()
-			ui.Text(c, tr.ArtistNames()).FontSize(11.5).TextColor(p.muted).SingleLine()
-		})
-	})
-	if card.Clicked() {
-		a.nowPlaying = true
-	}
 }
 
 // playerBarHeight is the height of the player along the foot of the pages.

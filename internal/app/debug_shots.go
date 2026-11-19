@@ -33,6 +33,23 @@ func init() {
 				mygo.RunOnMain(func() { fn(); a.redraw() })
 			}
 			mygo.RunOnMain(func() { a.win.Show(); a.win.Focus() })
+			if os.Getenv("NM_SCENE") == "skin" {
+				// The colors chosen in the settings: the pages' and the
+				// categories' icons, and the window that chose them.
+				step(0, func() {
+					a.settings.MainColor = "#eef3f8"
+					a.settings.IconColor = "#ff6a3d"
+				})
+				time.Sleep(2 * time.Second)
+				shot("skin", a.win)
+				mygo.RunOnMain(func() { a.openSettings() })
+				time.Sleep(2 * time.Second)
+				if w := a.settingsWin; w != nil {
+					shot("skin-settings", w)
+				}
+				mygo.RunOnMain(mygo.App.Quit)
+				return
+			}
 			if os.Getenv("NM_SCENE") == "perf" {
 				// Muted, marks on stderr where each part begins, for the
 				// frame log of MYGO_FRAME_STATS.

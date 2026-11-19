@@ -164,6 +164,36 @@ func (a *app) settingsView(c *ui.Context) {
 					a.changed()
 				}
 			})
+			// The colors the listener chose, over the appearance's: the wells
+			// show the one in use, and 默认 goes back to the appearance's.
+			shown := paletteFor(&t)
+			s.colors(&shown)
+			a.mainW, a.iconW = shown.bg, shown.navIcon(false)
+			def := paletteFor(&t)
+			row("主栏底色", "页面与播放器下的底色；「默认」跟随外观", func() {
+				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+					if ui.ColorWell(c.Key("main-color"), &a.mainW).Label("主栏底色").Changed() {
+						s.MainColor = hexOf(a.mainW)
+						a.changed()
+					}
+					if ui.Button(c.Key("main-color-default"), "默认").Clicked() {
+						s.MainColor, a.mainW = "", def.bg
+						a.changed()
+					}
+				})
+			})
+			row("图标色", "左栏分类与「我的」的图标颜色；「默认」跟随外观", func() {
+				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+					if ui.ColorWell(c.Key("icon-color"), &a.iconW).Label("图标色").Changed() {
+						s.IconColor = hexOf(a.iconW)
+						a.changed()
+					}
+					if ui.Button(c.Key("icon-color-default"), "默认").Clicked() {
+						s.IconColor, a.iconW = "", def.navIcon(false)
+						a.changed()
+					}
+				})
+			})
 		})
 
 		group("实验性功能", func() {
