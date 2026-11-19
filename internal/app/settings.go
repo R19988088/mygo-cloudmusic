@@ -49,12 +49,31 @@ type settings struct {
 	// CacheMB is how many megabytes the songs kept on disk may take; 0
 	// keeps none.
 	CacheMB int `json:"cacheMB"`
+	// SideMine is the list of 我的 the column of playlists beside the
+	// categories showed for the last song played: the listener's playlists
+	// (playlists), their saved ones (saved), or the podcasts; empty when it
+	// came from none of them, and so nothing shows beside the categories.
+	SideMine string `json:"sideMine"`
 
 	path string // where they were loaded from, and are saved to
 }
 
 func defaultSettings() settings {
 	return settings{NotchActivity: true, Quality: "exhigh", Appearance: "system", Volume: 0.8, Normalize: true, CacheMB: 2048}
+}
+
+// sideMine returns the list the column of playlists showed for the last
+// song played, and whether it showed one at all.
+func (s settings) sideMine() (mineKind, bool) {
+	switch s.SideMine {
+	case "playlists":
+		return minePlaylists, true
+	case "saved":
+		return mineSaved, true
+	case "podcasts":
+		return minePodcasts, true
+	}
+	return minePlaylists, false
 }
 
 func settingsPath() (string, error) {

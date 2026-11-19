@@ -15,8 +15,7 @@ const pagePad = 40
 
 // columns returns how many cards of at least min DIPs fit across the page.
 func (a *app) columns(c *ui.Context, min float32) int {
-	w, _ := c.Size()
-	inner := w - sidebarWidth - 2*pagePad
+	inner := a.contentWidth(c) - 2*pagePad
 	return max(2, int((inner+20)/(min+20)))
 }
 
@@ -272,13 +271,13 @@ func (a *app) playlistHeader(c *ui.Context, pl *netease.Playlist) {
 					if a.pl.Shuffle() {
 						a.pl.ToggleShuffle()
 					}
-					a.pl.PlayQueue(pl.Tracks, firstPlayable(pl.Tracks))
+					a.playFrom(pl.Tracks, firstPlayable(pl.Tracks))
 				}
 				if pillButton(c.Key("shuffle"), iconShuffle, "随机播放", p.hover.Over(p.bg), p.text).Clicked() {
 					if !a.pl.Shuffle() {
 						a.pl.ToggleShuffle()
 					}
-					a.pl.PlayQueue(pl.Tracks, firstPlayable(pl.Tracks))
+					a.playFrom(pl.Tracks, firstPlayable(pl.Tracks))
 				}
 				if mine := a.editable(pl.ID); mine != nil {
 					more := iconButton(c.Key("more"), iconMore, 18, p.muted, "更多")
@@ -346,10 +345,8 @@ func (a *app) trackRows(c *ui.Context, tracks []netease.Track, covers bool, head
 	if a.route.page == pagePlaylist {
 		pid = a.route.playlist
 	}
-	w, _ := c.Size()
-	wide := w-sidebarWidth > 820
-	top, bottom := a.insets(c)
-	// Rows out of view are not built, their marks with them: a list
+	wide := a.contentWidth(c) > 820
+	top, bottom := a.insets(c) // Rows out of view are not built, their marks with them: a list
 	// scrolled away from its start or end has content under the bars.
 	a.underTop, a.underBottom = true, true
 	ui.List(c.Key(a.route), &a.trackList, len(tracks)+1, func(i int) {
@@ -426,7 +423,7 @@ func (a *app) trackRows(c *ui.Context, tracks []netease.Track, covers bool, head
 			ui.Text(c, clock(tr.Length())).FontSize(12.5).FontFeatures("tnum").TextColor(p.faint).Width(44).TextAlign(ui.End)
 		})
 		if row.Clicked() && tr.Playable() {
-			a.pl.PlayQueue(tracks, i)
+			a.playFrom(tracks, i)
 		}
 	}).Grow(1).Padding(top+pageGap, pagePad-12, bottom+32, pagePad-12).ScrollbarInsets(top, 0, bottom, 0)
 }

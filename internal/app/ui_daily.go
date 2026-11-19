@@ -48,8 +48,7 @@ func (a *app) dailyCard(c *ui.Context, now time.Time) {
 	if len(songs) == 0 {
 		return
 	}
-	w, _ := c.Size()
-	inner := w - sidebarWidth - 2*pagePad
+	inner := a.contentWidth(c) - 2*pagePad
 	still := c.Preferences().ReduceMotion
 	art := a.art.get(netease.Sized(songs[0].Album.PicURL, 600), true)
 	card := ui.ButtonBase(c.Key("daily")).Height(dailyHeight).Radius(dailyRadius).FocusRing(false).Label("每日推荐").TextColor(white)
@@ -340,7 +339,7 @@ func (a *app) dailyPlayButton(c *ui.Context, songs []netease.Track, ours, playin
 		if ours {
 			a.pl.TogglePlay()
 		} else {
-			a.pl.PlayQueue(songs, firstPlayable(songs))
+			a.playFrom(songs, firstPlayable(songs))
 		}
 	}
 }
@@ -374,7 +373,7 @@ func (a *app) dailyPicks(c *ui.Context, songs []netease.Track, ours bool) {
 				})
 			})
 			if row.Clicked() {
-				a.pl.PlayQueue(songs, i)
+				a.playFrom(songs, i)
 			}
 		}
 	})
@@ -501,13 +500,13 @@ func (a *app) dailyPage(c *ui.Context) {
 						if a.pl.Shuffle() {
 							a.pl.ToggleShuffle()
 						}
-						a.pl.PlayQueue(songs, firstPlayable(songs))
+						a.playFrom(songs, firstPlayable(songs))
 					}
 					if pillButton(c.Key("shuffle"), iconShuffle, "随机播放", p.hover.Over(p.bg), p.text).Clicked() {
 						if !a.pl.Shuffle() {
 							a.pl.ToggleShuffle()
 						}
-						a.pl.PlayQueue(songs, firstPlayable(songs))
+						a.playFrom(songs, firstPlayable(songs))
 					}
 				})
 			})

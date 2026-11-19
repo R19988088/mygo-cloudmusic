@@ -27,6 +27,16 @@ type route struct {
 	playlist int64
 }
 
+// mineKind is a list of the sidebar's 我的 section, which the column of
+// playlists shows beside it.
+type mineKind int
+
+const (
+	minePlaylists mineKind = iota // 歌单
+	mineSaved                     // 收藏
+	minePodcasts                  // 播客
+)
+
 // app is the state both windows show. Everything in it is read and changed
 // on the main thread: by the views, and by goroutines through post.
 type app struct {
@@ -45,12 +55,20 @@ type app struct {
 	mine, saved  []netease.Playlist // the listener's playlists: made, and saved
 	recPlaylists []netease.Playlist // the day's playlists picked for the listener
 	login        loginState
-	accountOpen  bool           // the dropdown of the account row shows
-	naming       nameDialog     // the name of a playlist asked for
-	deleting     deleteDialog   // whether to delete a playlist, asked
-	liked        map[int64]bool // the songs the listener likes
-	toast        string         // a message to show once
-	picked       pickedUp       // the song a login picked up, waiting to play
+	accountOpen  bool // the dropdown of the account row shows
+	// The sidebar's 我的 section: closed (the default is open), which of
+	// its lists the column beside the categories shows, and whether one of
+	// them is chosen: the column shows while one is, and closes as a page
+	// is opened, animated by plW.
+	mineClosed bool
+	mineShown  mineKind
+	mineOn     bool
+	plW        float32        // how wide that column is, as it last laid out
+	naming     nameDialog     // the name of a playlist asked for
+	deleting   deleteDialog   // whether to delete a playlist, asked
+	liked      map[int64]bool // the songs the listener likes
+	toast      string         // a message to show once
+	picked     pickedUp       // the song a login picked up, waiting to play
 
 	daily       []netease.Track
 	dailySpin   spinState // the record on the daily card
@@ -64,10 +82,11 @@ type app struct {
 	loadingPl map[int64]bool
 	plErr     map[int64]string
 	trackList ui.ListState
-	// Where the page and the sidebar are scrolled, kept while Now Playing
-	// covers them, unbuilt.
+	// Where the page, the sidebar's categories and its playlists are
+	// scrolled, kept while Now Playing covers them, unbuilt.
 	pageScroll ui.ScrollState
 	navScroll  ui.ScrollState
+	plScroll   ui.ScrollState
 
 	query     string
 	searched  string
@@ -168,6 +187,9 @@ func Run() error {
 	mygo.App.WhenReady(func() {
 		a.settings = loadSettings()
 		a.settings.applyAppearance()
+		// The sidebar shows the list the last song played came from, and
+		// nothing beside the categories when it came from none.
+		a.mineShown, a.mineOn = a.settings.sideMine()
 		a.npPane = a.lyricsPaneChosen()
 		// Before the window: on Windows it lays out its content as it is
 		// made, and the view asks the player what plays.

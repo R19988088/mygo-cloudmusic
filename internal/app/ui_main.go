@@ -11,7 +11,15 @@ import (
 	"netease-music-mygo/internal/netease"
 )
 
-const sidebarWidth = 232
+// The sidebar is two columns, as Music's All Playlists: navWidth for the
+// categories and their entries, playlistWidth for the playlists beside
+// them, which shows only while one of 我的 is chosen. sidebarWidth is the
+// widest it gets, the two together.
+const (
+	navWidth      = 188
+	playlistWidth = 224
+	sidebarWidth  = navWidth + playlistWidth
+)
 
 func (a *app) view(c *ui.Context) {
 	t := *c.Theme()
@@ -48,14 +56,7 @@ func (a *app) view(c *ui.Context) {
 				// trackList), so it shows again as it was.
 				return
 			}
-			side := ui.Column(c).Width(sidebarWidth)
-			// Vibrancy is macOS's: on Windows the material behind it shows
-			// through where the sidebar pads its top as a dark strip, so
-			// the sidebar paints its own color there.
-			if runtime.GOOS != "darwin" || !c.Vibrancy() {
-				side.Background(p.sidebar)
-			}
-			side.Children(func() { a.sidebar(c) })
+			a.sidebar(c)
 			// Keyed, so that a popover of the sidebar opening or closing
 			// keeps what the page and its bars hold, their edges' fades.
 			ui.Box(c.Key("main")).Grow(1).Background(p.bg).BorderWidth(0, 0, 0, 1).BorderColor(p.hairline).Children(func() {
@@ -142,19 +143,47 @@ func (a *app) goForward() {
 	a.show(r)
 }
 
+// sidebar lays the left of the window as two columns: the categories and
+// their entries, and, while one of 我的 is chosen, the playlists beside
+// them, with their covers.
 func (a *app) sidebar(c *ui.Context) {
 	p := a.pal
-	// Under the window buttons where they sit over the sidebar, as the
-	// traffic lights do; elsewhere, as close to the top as to the sides.
-	top := float32(14)
-	if c.TitleBar().Left > 0 {
-		top = topBar(c) + 4
+	nav := ui.Column(c).Width(navWidth).DragWindow()
+	// Vibrancy is macOS's: on Windows the material behind it shows through
+	// where the column pads its top as a dark strip, so it paints its own
+	// color there.
+	if runtime.GOOS != "darwin" || !c.Vibrancy() {
+		nav.Background(p.sidebar)
 	}
-	// Where nothing in it takes the press, the sidebar moves the window, as
+	nav.Children(func() { a.navColumn(c) })
+	a.playlistColumn(c)
+}
+
+// columnsTop is how far the sidebar's columns keep from the top: under the
+// window buttons where they sit over them, as the traffic lights do;
+// elsewhere, as close to the top as to the sides.
+func columnsTop(c *ui.Context) float32 {
+	if c.TitleBar().Left > 0 {
+		return topBar(c) + 4
+	}
+	return 14
+}
+
+// contentWidth is the room the pages have right of the sidebar: the window
+// less the categories, and the playlists' column as wide as it has opened.
+func (a *app) contentWidth(c *ui.Context) float32 {
+	w, _ := c.Size()
+	return w - navWidth - a.plW
+}
+
+// navColumn is the sidebar's categories and their entries.
+func (a *app) navColumn(c *ui.Context) {
+	p := a.pal
+	// Where nothing in it takes the press, the column moves the window, as
 	// the title bar it reaches up into would.
-	ui.Column(c).Fill().Padding(top, 14, 14, 14).Gap(4).DragWindow().Children(func() {
+	ui.Column(c).Fill().Padding(columnsTop(c), 10, 10, 10).Gap(2).DragWindow().Children(func() {
 		// The search field.
-		field := ui.Row(c).Height(32).PaddingX(10).Gap(7).Radius(9).AlignItems(ui.Center).Margin(0, 0, 14, 0)
+		field := ui.Row(c).Height(30).PaddingX(9).Gap(6).Radius(8).AlignItems(ui.Center).Margin(0, 0, 12, 4)
 		focused := c.Focused(a.searchBox)
 		if focused {
 			field.Background(p.bg).Shadow(0, 0, 0, 3, p.accent.Alpha(0.25)).Border(1, p.accent.Alpha(0.6))
@@ -162,15 +191,16 @@ func (a *app) sidebar(c *ui.Context) {
 			field.Background(p.hover).Border(1, p.hairline)
 		}
 		field.Children(func() {
-			ui.Icon(c, iconSearch).Size(14, 14).TextColor(p.muted)
+			ui.Icon(c, iconSearch).Size(13, 13).TextColor(p.muted)
 			in := ui.TextInputBase(c.Key("search"), &a.query).Bind(&a.searchBox).Grow(1).
-				Placeholder("搜索歌曲、歌手").FontSize(13).Label("搜索")
+				Placeholder("搜索歌曲、歌手").FontSize(12.5).Label("搜索")
 			if in.Submitted() && strings.TrimSpace(a.query) != "" {
 				a.search(strings.TrimSpace(a.query))
 			}
 		})
 
-		ui.Scroll(c.Key("nav")).TrackScroll(&a.navScroll).Grow(1).Margin(0, -6).Padding(0, 6).Gap(4).Children(func() {
+		ui.Scroll(c.Key("nav")).TrackScroll(&a.navScroll).Grow(1).Margin(0, -6).Padding(0, 6).Gap(2).Children(func() {
+			a.navHeader(c, "浏览")
 			a.navItem(c, iconHome, "为你推荐", route{page: pageHome})
 			a.navItem(c, iconDaily, "每日推荐", route{page: pageDaily})
 			a.navItem(c, iconRadio, "私人 FM", route{page: pageFM})
@@ -178,11 +208,15 @@ func (a *app) sidebar(c *ui.Context) {
 			if a.searched != "" {
 				a.navItem(c, iconSearch, "搜索结果", route{page: pageSearch})
 			}
-			a.myPlaylists(c, "我的歌单", a.mine, true)
-			a.myPlaylists(c, "收藏的歌单", a.saved, false)
+			a.navGroup(c, "我的", &a.mineClosed, func() {
+				a.mineItem(c, iconNote, "歌单", minePlaylists)
+				a.mineItem(c, iconMic, "播客", minePodcasts)
+				a.mineItem(c, iconHeart, "收藏", mineSaved)
+			})
 		})
 
-		// What plays, as a card at the foot of the sidebar, over who listens.
+		// What plays, as a card at the foot of the categories, over who
+		// listens: they stay while the playlists' column comes and goes.
 		if tr := a.pl.Current(); tr != nil {
 			a.sidebarNowPlaying(c, tr)
 		}
@@ -190,10 +224,91 @@ func (a *app) sidebar(c *ui.Context) {
 	})
 }
 
-func (a *app) navItem(c *ui.Context, icon *ui.SVG, label string, r route) {
+// playlistColumn is the column of playlists beside the categories: it
+// slides open as one of 我的 is chosen, and shut as a page is opened, as
+// Music's column of playlists does. It holds a cover and its name, under
+// the heading of whose they are.
+func (a *app) playlistColumn(c *ui.Context) {
 	p := a.pal
-	selected := a.route.page == r.page && !a.nowPlaying
-	b := ui.ButtonBase(c.Key(label)).Height(34).PaddingX(10).Gap(10).Radius(8).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false)
+	col := ui.Column(c).Clip().DragWindow()
+	target := float32(0)
+	if a.mineOn && !a.nowPlaying {
+		target = playlistWidth
+	}
+	w := col.AnimateTo("width", target, ui.Animation{Duration: 240 * time.Millisecond})
+	// A spring could overshoot what the column may be.
+	w = min(max(w, 0), playlistWidth)
+	a.plW = w
+	col.Width(w)
+	if runtime.GOOS != "darwin" || !c.Vibrancy() {
+		// A little lighter than the categories beside it, as the playlists
+		// of Music are.
+		shade := float32(0.5)
+		if p.dark {
+			shade = 0.05
+		}
+		col.Background(p.sidebar.Mix(white, shade))
+	}
+	if target == 0 && w < 0.5 {
+		// Shut: nothing to list, no line to draw, and nothing built behind
+		// the clip.
+		return
+	}
+	// Its border and padding are inside its width, which leaves it no
+	// narrower than they are: the column would keep that much of itself
+	// between the categories and the page as it shut, a strip of nothing.
+	// The border comes as it opens, and the padding sits in a column within.
+	col.BorderWidth(0, 0, 0, 1).BorderColor(p.hairline.Alpha(min(w/24, 1)))
+	col.Children(func() {
+		ui.Column(c).Fill().Padding(columnsTop(c), 8, 8, 8).Children(func() {
+			ui.Scroll(c.Key("playlists")).TrackScroll(&a.plScroll).Grow(1).Margin(0, -6).Padding(0, 6).Gap(4).Children(func() {
+				a.mineList(c)
+			})
+		})
+	})
+}
+
+// navHeader is the heading of a group of the categories, as the headings
+// of Library in Music.
+func (a *app) navHeader(c *ui.Context, title string) {
+	ui.Text(c, title).FontSize(11.5).FontWeight(600).TextColor(a.pal.faint).Margin(8, 4, 3, 6)
+}
+
+// navGroup is the heading of a group of entries which folds away and out
+// again, its arrow turning as it does, as the headings of Library hold
+// theirs in Music.
+func (a *app) navGroup(c *ui.Context, title string, closed *bool, fn func()) {
+	p := a.pal
+	b := ui.ButtonBase(c.Key(title)).Height(26).Padding(0, 4, 0, 8).Radius(7).AlignItems(ui.Center).Justify(ui.Start).Gap(6).FocusRing(false).Label(title)
+	if b.Hovered() {
+		b.Background(p.hover)
+	}
+	b.Children(func() {
+		ui.Text(c, title).FontSize(11.5).FontWeight(600).TextColor(p.faint).SingleLine()
+		// Closed, the arrow points at the entries it hides, as a chevron
+		// of the sidebar's headings does.
+		turn := float32(-90)
+		if !*closed {
+			turn = 0
+		}
+		ui.Icon(c, iconDown).Size(10, 10).Rotate(b.AnimateTo("turn", turn, ui.Animation{Duration: 150 * time.Millisecond})).
+			TextColor(p.faint)
+	})
+	if b.Clicked() {
+		*closed = !*closed
+	}
+	if *closed {
+		return
+	}
+	fn()
+}
+
+// mineItem is an entry under 我的: it picks which list the playlists' column
+// shows, and shows which one is shown.
+func (a *app) mineItem(c *ui.Context, icon *ui.SVG, label string, kind mineKind) {
+	p := a.pal
+	selected := a.mineOn && a.mineShown == kind && !a.nowPlaying
+	b := ui.ButtonBase(c.Key(label)).Height(30).Padding(0, 8, 0, 26).Gap(10).Radius(7).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false).Label(label)
 	bg := ui.Transparent
 	switch {
 	case selected:
@@ -202,19 +317,116 @@ func (a *app) navItem(c *ui.Context, icon *ui.SVG, label string, r route) {
 		bg = p.hover
 	}
 	b.Background(b.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
-	color := p.text
+	iconColor := p.muted
 	if selected {
-		color = p.accent
+		iconColor = p.text
 	}
 	b.Children(func() {
-		ui.Icon(c, icon).Size(17, 17).TextColor(color)
-		ui.Text(c, label).FontSize(13.5).FontWeight(500).TextColor(p.text)
+		ui.Icon(c, icon).Size(16, 16).TextColor(iconColor)
+		ui.Text(c, label).FontSize(13).FontWeight(500).TextColor(p.text)
 	})
 	if b.Clicked() {
+		a.mineShown, a.mineOn = kind, true
+	}
+}
+
+// mineList lists what the entry of 我的 chosen holds, under its heading.
+// Podcasts have no list yet: NetEase's come as shows, which the app does
+// not load.
+func (a *app) mineList(c *ui.Context) {
+	switch a.mineShown {
+	case mineSaved:
+		a.playlistList(c, "收藏的歌单", a.saved, false, "登录后，收藏的歌单显示在这里")
+	case minePodcasts:
+		a.playlistList(c, "播客", nil, false, "播客还没有接入")
+	default:
+		a.playlistList(c, "我的歌单", a.mine, true, "登录后，你的歌单显示在这里")
+	}
+}
+
+func (a *app) navItem(c *ui.Context, icon *ui.SVG, label string, r route) {
+	p := a.pal
+	selected := !a.mineOn && a.route.page == r.page && !a.nowPlaying
+	b := ui.ButtonBase(c.Key(label)).Height(32).Padding(0, 8, 0, 14).Gap(10).Radius(7).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false)
+	bg := ui.Transparent
+	switch {
+	case selected:
+		bg = p.press
+	case b.Hovered():
+		bg = p.hover
+	}
+	b.Background(b.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
+	iconColor := p.muted
+	if selected {
+		iconColor = p.text
+	}
+	b.Children(func() {
+		ui.Icon(c, icon).Size(17, 17).TextColor(iconColor)
+		ui.Text(c, label).FontSize(13).FontWeight(500).TextColor(p.text)
+	})
+	if b.Clicked() {
+		// A page opened closes the playlists' column, which one of 我的
+		// opened.
+		a.mineOn = false
 		a.open(r)
 	}
 }
 
+// playFrom plays tracks from at, and remembers which of 我的 they came
+// from: the column of playlists beside the categories shows it again on
+// the next launch.
+func (a *app) playFrom(tracks []netease.Track, at int) {
+	a.pl.PlayQueue(tracks, at)
+	a.noteSource()
+}
+
+// noteSource remembers the list the song just played came from, or that it
+// came from none of 我的, whose column of playlists then stays shut on the
+// next launch.
+func (a *app) noteSource() {
+	name := ""
+	if kind, ok := a.routeMine(a.route); ok {
+		name = kind.setting()
+	}
+	if a.settings.SideMine == name {
+		return
+	}
+	a.settings.SideMine = name
+	a.settings.save()
+}
+
+// routeMine returns which of 我的 the page of r lists the playlists of, if
+// it lists any: the listener's own, or the ones they saved.
+func (a *app) routeMine(r route) (mineKind, bool) {
+	if r.page != pagePlaylist {
+		return 0, false
+	}
+	for _, pl := range a.mine {
+		if pl.ID == r.playlist {
+			return minePlaylists, true
+		}
+	}
+	for _, pl := range a.saved {
+		if pl.ID == r.playlist {
+			return mineSaved, true
+		}
+	}
+	return 0, false
+}
+
+// setting names the list of 我的 in the settings, for the next launch.
+func (k mineKind) setting() string {
+	switch k {
+	case mineSaved:
+		return "saved"
+	case minePodcasts:
+		return "podcasts"
+	}
+	return "playlists"
+}
+
+// sidebarNowPlaying is the card at the foot of the categories: the cover of
+// what plays and its name, which opens Now Playing.
 func (a *app) sidebarNowPlaying(c *ui.Context, tr *netease.Track) {
 	p := a.pal
 	card := ui.ButtonBase(c.Key("np-card")).Gap(10).Padding(8).Radius(12).AlignItems(ui.Center).FocusRing(false).Label("正在播放")
@@ -387,7 +599,7 @@ func (a *app) loadHome() {
 func (a *app) loadPlaylist(id int64, thenPlay bool) {
 	if pl := a.playlists[id]; pl != nil {
 		if thenPlay {
-			a.pl.PlayQueue(pl.Tracks, firstPlayable(pl.Tracks))
+			a.playFrom(pl.Tracks, firstPlayable(pl.Tracks))
 		}
 		return
 	}
@@ -406,7 +618,7 @@ func (a *app) loadPlaylist(id int64, thenPlay bool) {
 			}
 			a.playlists[id] = pl
 			if thenPlay {
-				a.pl.PlayQueue(pl.Tracks, firstPlayable(pl.Tracks))
+				a.playFrom(pl.Tracks, firstPlayable(pl.Tracks))
 			}
 		})
 	}()
@@ -424,6 +636,7 @@ func firstPlayable(tracks []netease.Track) int {
 func (a *app) search(q string) {
 	a.history, a.forward = append(a.history, a.route), nil
 	a.route = route{page: pageSearch}
+	a.mineOn = false
 	a.trackList, a.pageScroll = ui.ListState{}, ui.ScrollState{}
 	a.nowPlaying = false
 	a.runSearch(q)

@@ -322,23 +322,24 @@ func (a *app) menuItem(c *ui.Context, icon *ui.SVG, label, shortcut string) ui.E
 	return b
 }
 
-// myPlaylists lists the listener's playlists in the sidebar: those they
-// made, if mine, with a button to make one and a menu to rename them.
-func (a *app) myPlaylists(c *ui.Context, title string, lists []netease.Playlist, mine bool) {
-	if len(lists) == 0 {
-		return
-	}
+// playlistList lists playlists of the playlists' column: those the
+// listener made, if mine, under a heading with a button to make another
+// and a menu to rename them. Without any, it says empty instead.
+func (a *app) playlistList(c *ui.Context, title string, lists []netease.Playlist, mine bool, empty string) {
 	p := a.pal
-	ui.Row(c.Key(title)).AlignItems(ui.Center).Margin(18, 4, 6, 10).Children(func() {
-		ui.Text(c, title).FontSize(11.5).FontWeight(600).TextColor(p.faint).Grow(1)
-		if mine && iconButton(c.Key("new"), iconPlus, 13, p.faint, "新建歌单").Clicked() {
+	ui.Row(c.Key(title)).Height(30).AlignItems(ui.Center).Padding(0, 4, 0, 6).Margin(8, 0, 0, 0).Children(func() {
+		ui.Text(c, title).FontSize(13).FontWeight(700).TextColor(p.muted).Grow(1).SingleLine()
+		if mine && a.profile != nil && iconButton(c.Key("new"), iconPlus, 13, p.faint, "新建歌单").Clicked() {
 			a.newPlaylist(nil)
 		}
 	})
+	if len(lists) == 0 {
+		ui.Text(c, empty).FontSize(12).TextColor(p.faint).MaxLines(3).LineHeight(1.5).Margin(2, 10, 4, 6)
+	}
 	for i := range lists {
 		pl := &lists[i]
 		selected := a.route.page == pagePlaylist && a.route.playlist == pl.ID && !a.nowPlaying
-		b := ui.ButtonBase(c.Key(pl.ID)).Height(34).PaddingX(8).Gap(10).Radius(8).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false).Label(pl.Name)
+		b := ui.ButtonBase(c.Key(pl.ID)).Height(52).PaddingX(6).Gap(11).Radius(9).AlignItems(ui.Center).Justify(ui.Start).FocusRing(false).Label(pl.Name)
 		switch {
 		case selected:
 			b.Background(p.press)
@@ -346,8 +347,8 @@ func (a *app) myPlaylists(c *ui.Context, title string, lists []netease.Playlist,
 			b.Background(p.hover)
 		}
 		b.Children(func() {
-			a.cover(c, pl.Cover(), 80, 22, 5)
-			ui.Text(c, pl.Name).FontSize(13).SingleLine().Shrink(1).MinWidth(0)
+			a.cover(c, pl.Cover(), 140, 40, 8)
+			ui.Text(c, pl.Name).FontSize(14.5).SingleLine().Shrink(1).MinWidth(0)
 		})
 		if mine && pl.SpecialType != 5 {
 			b.ContextMenu(func(m *ui.Menu) {
