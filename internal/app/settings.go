@@ -54,6 +54,9 @@ type settings struct {
 	// (playlists), their saved ones (saved), or the podcasts; empty when it
 	// came from none of them, and so nothing shows beside the categories.
 	SideMine string `json:"sideMine"`
+	// SidePlaylist is the playlist that list held the last song played in,
+	// whose page shows beside the column on the next launch.
+	SidePlaylist int64 `json:"sidePlaylist"`
 
 	path string // where they were loaded from, and are saved to
 }

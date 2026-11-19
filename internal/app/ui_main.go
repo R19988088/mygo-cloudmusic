@@ -380,19 +380,29 @@ func (a *app) playFrom(tracks []netease.Track, at int) {
 	a.noteSource()
 }
 
-// noteSource remembers the list the song just played came from, or that it
-// came from none of 我的, whose column of playlists then stays shut on the
-// next launch.
+// noteSource remembers the list the song just played came from, and the
+// playlist of it, whose page shows on the next launch as that column opens;
+// a song from none of 我的 remembers nothing, which leaves both shut.
 func (a *app) noteSource() {
-	name := ""
+	name, id := "", int64(0)
 	if kind, ok := a.routeMine(a.route); ok {
-		name = kind.setting()
+		name, id = kind.setting(), a.route.playlist
 	}
-	if a.settings.SideMine == name {
+	if a.settings.SideMine == name && a.settings.SidePlaylist == id {
 		return
 	}
-	a.settings.SideMine = name
+	a.settings.SideMine, a.settings.SidePlaylist = name, id
 	a.settings.save()
+}
+
+// restoreSide shows what the sidebar kept of the last song played: the list
+// it came from, whose playlists show beside the categories, and the page of
+// its playlist, not the home page the app would open on.
+func (a *app) restoreSide() {
+	a.mineShown, a.mineOn = a.settings.sideMine()
+	if a.mineOn && a.settings.SidePlaylist != 0 {
+		a.route = route{page: pagePlaylist, playlist: a.settings.SidePlaylist}
+	}
 }
 
 // routeMine returns which of 我的 the page of r lists the playlists of, if

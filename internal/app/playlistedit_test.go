@@ -349,6 +349,9 @@ func TestPlayingRemembersTheColumn(t *testing.T) {
 	if a.settings.SideMine != "playlists" {
 		t.Errorf("playing from a playlist remembers %q, want playlists", a.settings.SideMine)
 	}
+	if a.settings.SidePlaylist != 10 {
+		t.Errorf("playing from playlist 10 remembers %d", a.settings.SidePlaylist)
+	}
 	a.route = route{page: pagePlaylist, playlist: 20}
 	tt.Frame()
 	if err := tt.Click("起风了"); err != nil {
@@ -358,17 +361,37 @@ func TestPlayingRemembersTheColumn(t *testing.T) {
 	if a.settings.SideMine != "saved" {
 		t.Errorf("playing from a saved playlist remembers %q, want saved", a.settings.SideMine)
 	}
+	if a.settings.SidePlaylist != 20 {
+		t.Errorf("playing from playlist 20 remembers %d", a.settings.SidePlaylist)
+	}
 	a.route = route{page: pageCharts}
 	a.noteSource()
-	if a.settings.SideMine != "" {
-		t.Errorf("playing from the charts remembers %q, want none", a.settings.SideMine)
+	if a.settings.SideMine != "" || a.settings.SidePlaylist != 0 {
+		t.Errorf("playing from the charts remembers %q %d, want none", a.settings.SideMine, a.settings.SidePlaylist)
 	}
-	// What was kept is what the sidebar shows again.
+	// What was kept is what the app opens on: that list beside the
+	// categories, and the page of its playlist rather than the home page.
 	if kind, ok := (settings{SideMine: "saved"}).sideMine(); !ok || kind != mineSaved {
 		t.Errorf("a kept saved list restores %v, %v", kind, ok)
 	}
-	if _, ok := (settings{}).sideMine(); ok {
-		t.Error("nothing kept still shows a column")
+	fresh := editTestApp()
+	fresh.route = route{page: pageHome}
+	fresh.settings = settings{SideMine: "saved", SidePlaylist: 20}
+	fresh.restoreSide()
+	if !fresh.mineOn || fresh.mineShown != mineSaved {
+		t.Errorf("the column opens on %v, %v", fresh.mineShown, fresh.mineOn)
+	}
+	if fresh.route.page != pagePlaylist || fresh.route.playlist != 20 {
+		t.Errorf("the app opens on %+v, want playlist 20", fresh.route)
+	}
+	fresh.settings = settings{}
+	fresh.route = route{page: pageHome}
+	fresh.restoreSide()
+	if fresh.mineOn {
+		t.Error("nothing kept still opens the column")
+	}
+	if fresh.route.page != pageHome {
+		t.Errorf("nothing kept opens %+v, want the home page", fresh.route)
 	}
 }
 

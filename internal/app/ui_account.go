@@ -62,6 +62,12 @@ func (a *app) signedIn(prof *netease.Profile) {
 	}
 	a.loadHome()
 	if prof == nil {
+		// The page the last song played showed is one of the lists of
+		// nobody signed in: the home page instead of the error it would
+		// show.
+		if a.route.page == pagePlaylist && a.route.playlist == a.settings.SidePlaylist {
+			a.show(route{page: pageHome})
+		}
 		return
 	}
 	a.loadLiked(prof.UserID)

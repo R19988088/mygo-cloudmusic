@@ -189,7 +189,7 @@ func Run() error {
 		a.settings.applyAppearance()
 		// The sidebar shows the list the last song played came from, and
 		// nothing beside the categories when it came from none.
-		a.mineShown, a.mineOn = a.settings.sideMine()
+		a.restoreSide()
 		a.npPane = a.lyricsPaneChosen()
 		// Before the window: on Windows it lays out its content as it is
 		// made, and the view asks the player what plays.
