@@ -194,17 +194,39 @@ func (a *app) navColumn(c *ui.Context) {
 		field := ui.Row(c).Height(30).PaddingX(9).Gap(6).Radius(8).AlignItems(ui.Center).Margin(0, 0, 12, 4)
 		focused := c.Focused(a.searchBox)
 		if focused {
-			field.Background(p.bg).Shadow(0, 0, 0, 3, p.accent.Alpha(0.25)).Border(1, p.accent.Alpha(0.6))
+			// Focused, the field lifts off the column rather than turning
+			// white under its words, which a color of the listener's may leave
+			// unreadable.
+			bg, ring := p.bg, p.accent
+			if p.nav.bgSet {
+				bg = p.nav.bg.Mix(p.words(p.nav).text, 0.12)
+			}
+			if p.nav.wordsSet || p.nav.bgSet {
+				ring = p.words(p.nav).text
+			}
+			field.Background(bg).Shadow(0, 0, 0, 3, ring.Alpha(0.25)).Border(1, ring.Alpha(0.6))
 		} else {
 			field.Background(p.hover).Border(1, p.hairline)
 		}
 		field.Children(func() {
 			ui.Icon(c, iconSearch).Size(13, 13).TextColor(p.navIcons(false))
-			in := ui.TextInputBase(c.Key("search"), &a.query).Bind(&a.searchBox).Grow(1).
-				Placeholder("搜索歌曲、歌手").FontSize(12.5).Label("搜索")
-			if in.Submitted() && strings.TrimSpace(a.query) != "" {
-				a.search(strings.TrimSpace(a.query))
-			}
+			// What the field writes is the column's text color, at 80%: the
+			// framework's placeholder is one gray for every appearance, which
+			// a color of the listener's leaves unreadable, so the field draws
+			// its own.
+			w := p.words(p.nav).text.Alpha(0.8)
+			ui.Box(c).Grow(1).Children(func() {
+				in := ui.TextInputBase(c.Key("search"), &a.query).Bind(&a.searchBox).Fill().
+					Placeholder("").FontSize(12.5).Label("搜索").TextColor(w)
+				if in.Submitted() && strings.TrimSpace(a.query) != "" {
+					a.search(strings.TrimSpace(a.query))
+				}
+				if a.query == "" {
+					ui.Row(c).Absolute().Left(0).Top(0).Right(0).Bottom(0).AlignItems(ui.Center).PassThrough().Children(func() {
+						ui.Text(c, "搜索歌曲、歌手").FontSize(12.5).TextColor(w).SingleLine().PassThrough()
+					})
+				}
+			})
 		})
 
 		ui.Scroll(c.Key("nav")).TrackScroll(&a.navScroll).Grow(1).Margin(0, -6).Padding(0, 6).Gap(2).Children(func() {

@@ -37,8 +37,8 @@ func init() {
 				// The colors chosen in the settings, each column of the
 				// sidebar its own, and the window that chose them.
 				step(0, func() {
-					a.settings.MainColor, a.settings.MainText, a.settings.IconColor = "#e6e2f0", "#2e2740", "#ff6a3d"
-					a.settings.SideColor, a.settings.SideText, a.settings.SideIcon = "#fdf7ef", "#4a3b2f", "#3b82f6"
+					a.settings.MainColor, a.settings.MainText, a.settings.IconColor = "#c14657", "#ffffff", "#ffffff"
+					a.settings.SideColor, a.settings.SideText, a.settings.SideIcon = "#f6f2ea", "#2a2622", "#8a7f72"
 				})
 				time.Sleep(2 * time.Second)
 				shot("skin", a.win)
