@@ -34,10 +34,10 @@ func init() {
 			}
 			mygo.RunOnMain(func() { a.win.Show(); a.win.Focus() })
 			if os.Getenv("NM_SCENE") == "skin" {
-				// The colors chosen in the settings: the pages' and the
-				// categories' icons, and the window that chose them.
+				// The colors chosen in the settings: the categories' column and
+				// the icons in it, and the window that chose them.
 				step(0, func() {
-					a.settings.MainColor = "#eef3f8"
+					a.settings.MainColor = "#eae4f2"
 					a.settings.IconColor = "#ff6a3d"
 				})
 				time.Sleep(2 * time.Second)

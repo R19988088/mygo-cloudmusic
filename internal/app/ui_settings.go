@@ -168,16 +168,16 @@ func (a *app) settingsView(c *ui.Context) {
 			// show the one in use, and 默认 goes back to the appearance's.
 			shown := paletteFor(&t)
 			s.colors(&shown)
-			a.mainW, a.iconW = shown.bg, shown.navIcon(false)
+			a.mainW, a.iconW = shown.sidebar, shown.navIcon(false)
 			def := paletteFor(&t)
-			row("主栏底色", "页面与播放器下的底色；「默认」跟随外观", func() {
+			row("主栏底色", "左栏分类栏的底色；「默认」跟随外观", func() {
 				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 					if ui.ColorWell(c.Key("main-color"), &a.mainW).Label("主栏底色").Changed() {
 						s.MainColor = hexOf(a.mainW)
 						a.changed()
 					}
 					if ui.Button(c.Key("main-color-default"), "默认").Clicked() {
-						s.MainColor, a.mainW = "", def.bg
+						s.MainColor, a.mainW = "", def.sidebar
 						a.changed()
 					}
 				})

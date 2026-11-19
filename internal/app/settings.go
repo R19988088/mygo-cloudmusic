@@ -31,9 +31,9 @@ type settings struct {
 	Quality string `json:"quality"`
 	// Appearance is light, dark, or system to follow the system.
 	Appearance string `json:"appearance"`
-	// MainColor is the color of the pages as #rrggbb, and IconColor the color
-	// of the categories' icons: the listener's own, where they chose them.
-	// Empty follows the appearance.
+	// MainColor is the color of the categories' column as #rrggbb, and
+	// IconColor the color of its icons: the listener's own, where they chose
+	// them. Empty follows the appearance.
 	MainColor string `json:"mainColor"`
 	IconColor string `json:"iconColor"`
 	// Smoke makes the progress bars comets trailing smoke as music plays,
@@ -186,7 +186,7 @@ func (s settings) applyAppearance() {
 // colors puts the colors the listener chose over the appearance's.
 func (s settings) colors(p *palette) {
 	if c, ok := colorOf(s.MainColor); ok {
-		p.bg = c
+		p.sidebar = c
 	}
 	if c, ok := colorOf(s.IconColor); ok {
 		p.icon, p.iconSet = c, true

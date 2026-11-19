@@ -15,8 +15,11 @@ func TestChosenColors(t *testing.T) {
 	s.MainColor, s.IconColor = "#eef3f8", "#FF6A3D"
 	p := base
 	s.colors(&p)
-	if p.bg != ui.Hex("#eef3f8") {
-		t.Errorf("the pages are %v, want the color chosen", p.bg)
+	if p.sidebar != ui.Hex("#eef3f8") {
+		t.Errorf("the categories are on %v, want the color chosen", p.sidebar)
+	}
+	if p.bg != base.bg {
+		t.Errorf("the pages took %v, want the appearance's", p.bg)
 	}
 	if !p.iconSet || p.navIcon(true) != ui.Hex("#ff6a3d") || p.navIcon(false) != ui.Hex("#ff6a3d") {
 		t.Errorf("the icons are %v, want the color chosen", p.icon)
@@ -28,7 +31,7 @@ func TestChosenColors(t *testing.T) {
 		p := base
 		s.MainColor, s.IconColor = bad, bad
 		s.colors(&p)
-		if p.bg != base.bg || p.iconSet {
+		if p.sidebar != base.sidebar || p.iconSet {
 			t.Errorf("%q was taken for a color", bad)
 		}
 	}
