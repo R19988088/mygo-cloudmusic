@@ -51,6 +51,9 @@ type app struct {
 	win   *mygo.Window
 	notch *notch
 	tray  *tray
+	// thumb is the player's controls on the window's taskbar preview, where a
+	// platform draws them.
+	thumb *thumbBar
 	art   *artCache
 	pl    *player.Player
 	pal   palette
@@ -271,9 +274,11 @@ func Run() error {
 			a.notch = newNotch(a)
 		}
 		// Elsewhere the app keeps in the notification area, which brings it
-		// back once its window is closed.
+		// back once its window is closed, and its taskbar preview holds the
+		// player's controls.
 		if runtime.GOOS != "darwin" {
 			a.tray = startTray(a)
+			a.thumb = startThumbBar(a)
 		}
 		if shotHook != nil {
 			shotHook(a)

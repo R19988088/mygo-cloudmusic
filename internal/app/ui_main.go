@@ -37,6 +37,11 @@ func (a *app) view(c *ui.Context) {
 
 	a.shortcuts(c)
 
+	// The taskbar preview's buttons show what plays, as the bar does.
+	if a.thumb != nil {
+		a.thumb.update(a.pl.Playing(), len(a.pl.Queue()) > 0)
+	}
+
 	if c.Vibrancy() {
 		c.Root().Background(ui.Transparent)
 	}
