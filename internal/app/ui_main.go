@@ -37,10 +37,9 @@ func (a *app) view(c *ui.Context) {
 
 	a.shortcuts(c)
 
-	// The taskbar preview's buttons show what plays, as the bar does, in the
-	// color of the title bar's words.
+	// The taskbar preview's buttons show what plays, as the bar does.
 	if a.thumb != nil {
-		a.thumb.update(a.pl.Playing(), len(a.pl.Queue()) > 0, p.text)
+		a.thumb.update(a.pl.Playing(), len(a.pl.Queue()) > 0)
 	}
 
 	if c.Vibrancy() {

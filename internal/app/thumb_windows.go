@@ -5,6 +5,7 @@ package app
 import (
 	"encoding/binary"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"github.com/egoist/mygo"
@@ -30,6 +31,10 @@ const (
 
 	whCallWndProc = 4 // WH_CALLWNDPROC
 
+	// themeCheck is how often the title bar's color is read again, which
+	// changes when the listener changes Windows' theme.
+	themeCheck = 2 * time.Second
+
 	thumbPrev = 1
 	thumbPlay = 2
 	thumbNext = 3
@@ -41,10 +46,12 @@ const (
 )
 
 var (
-	ole32 = syscall.NewLazyDLL("ole32.dll")
+	ole32    = syscall.NewLazyDLL("ole32.dll")
+	advapi32 = syscall.NewLazyDLL("advapi32.dll")
 
 	procCoInitializeEx        = ole32.NewProc("CoInitializeEx")
 	procCoCreateInstance      = ole32.NewProc("CoCreateInstance")
+	procRegGetValueW          = advapi32.NewProc("RegGetValueW")
 	procSetWindowsHookExW     = user32.NewProc("SetWindowsHookExW")
 	procCallNextHookEx        = user32.NewProc("CallNextHookEx")
 	procGetCurrentThreadID    = kernel32.NewProc("GetCurrentThreadId")
@@ -81,6 +88,7 @@ type thumbBar struct {
 	cb       uintptr // what the hook calls, so Windows keeps it alive
 	hooked   bool
 	word     ui.Color   // the color of the title bar's words, which the icons are
+	themedAt time.Time  // when word was last read from Windows
 	instance uintptr    // ITaskbarList3
 	created  uint32     // the message Explorer sends once it made the button
 	icons    [4]uintptr // 上一首, 播放, 暂停, 下一首
@@ -187,17 +195,13 @@ func (t *thumbBar) add() {
 	}
 	t.build()
 	var buttons [3]thumbButtonInfo
-	on := t.has
 	set := func(i int, id uint32, icon uintptr, tip string) {
 		b := &buttons[i]
 		b.mask = thbIcon | thbTip | thbFlags
 		b.id = id
 		b.icon = icon
 		copy(b.tip[:], utf16Of(tip))
-		b.flags = thbfDisabled
-		if on {
-			b.flags = thbfEnabled
-		}
+		b.flags = thbfEnabled
 	}
 	set(0, thumbPrev, t.icons[0], "上一首")
 	set(1, thumbPlay, t.playIcon(), "播放/暂停")
@@ -219,17 +223,20 @@ func (t *thumbBar) playIcon() uintptr {
 }
 
 // update shows the player's state on the buttons, and the color of the title
-// bar's words on them, drawing them again when either changed.
-func (t *thumbBar) update(playing, has bool, word ui.Color) {
-	state := t.known && playing == t.playing && has == t.has
-	color := word == t.word
-	if state && color {
+// bar's words on them, drawing them again when either changed. The buttons stay
+// enabled whatever plays: a disabled one takes no clicks, and Explorer sends
+// nothing for it.
+func (t *thumbBar) update(playing, has bool) {
+	state := t.known && playing == t.playing
+	if state && time.Since(t.themedAt) < themeCheck {
 		return
 	}
+	word := t.words()
+	colorChanged := word != t.word
 	t.known, t.playing, t.has, t.word = true, playing, has, word
 	t.ensure()
 	if t.built {
-		if !color {
+		if colorChanged && t.icons[0] != 0 {
 			t.build()
 		}
 		t.push()
@@ -239,21 +246,39 @@ func (t *thumbBar) update(playing, has bool, word ui.Color) {
 // push writes the state to the buttons Windows already shows.
 func (t *thumbBar) push() {
 	var buttons [3]thumbButtonInfo
-	flags := uint32(thbfDisabled)
-	if t.has {
-		flags = thbfEnabled
-	}
 	set := func(i int, id uint32, icon uintptr) {
 		b := &buttons[i]
 		b.mask = thbIcon | thbFlags
 		b.id = id
 		b.icon = icon
-		b.flags = flags
+		b.flags = thbfEnabled
 	}
 	set(0, thumbPrev, t.icons[0])
 	set(1, thumbPlay, t.playIcon())
 	set(2, thumbNext, t.icons[3])
 	comCallFull(t.instance, tbThumbBarUpdateButtons, t.hwnd, 3, uintptr(unsafe.Pointer(&buttons[0])))
+}
+
+// words is the color of the title bar's words: white on a dark one, near black
+// on a light one, as Windows draws the title bar of the theme it is set to.
+func (t *thumbBar) words() ui.Color {
+	t.themedAt = time.Now()
+	if lightTheme() {
+		return ui.RGBA(0x1a, 0x1a, 0x1a, 1)
+	}
+	return ui.RGBA(0xff, 0xff, 0xff, 1)
+}
+
+// lightTheme reports whether Windows draws its taskbar and the preview over a
+// window light, as personalization says.
+func lightTheme() bool {
+	const hkeyCurrentUser, rrfRtRegDword = 0x80000001, 0x10
+	key, _ := syscall.UTF16PtrFromString("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize")
+	value, _ := syscall.UTF16PtrFromString("SystemUsesLightTheme")
+	var v, size uint32 = 0, 4
+	hr, _, _ := procRegGetValueW.Call(hkeyCurrentUser, uintptr(unsafe.Pointer(key)), uintptr(unsafe.Pointer(value)),
+		rrfRtRegDword, 0, uintptr(unsafe.Pointer(&v)), uintptr(unsafe.Pointer(&size)))
+	return !failedHR(hr) && v != 0
 }
 
 // build makes the icons in the color of the title bar's words, drawing them
