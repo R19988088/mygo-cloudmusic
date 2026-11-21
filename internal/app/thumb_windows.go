@@ -8,6 +8,7 @@ import (
 	"unsafe"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
 )
 
 // The thumbnail buttons Windows draws under a window's taskbar preview:
@@ -38,12 +39,10 @@ const (
 )
 
 var (
-	ole32    = syscall.NewLazyDLL("ole32.dll")
-	advapi32 = syscall.NewLazyDLL("advapi32.dll")
+	ole32 = syscall.NewLazyDLL("ole32.dll")
 
 	procCoInitializeEx        = ole32.NewProc("CoInitializeEx")
 	procCoCreateInstance      = ole32.NewProc("CoCreateInstance")
-	procRegGetValueW          = advapi32.NewProc("RegGetValueW")
 	procSetWindowsHookExW     = user32.NewProc("SetWindowsHookExW")
 	procCallNextHookEx        = user32.NewProc("CallNextHookEx")
 	procGetCurrentThreadID    = kernel32.NewProc("GetCurrentThreadId")
@@ -79,6 +78,7 @@ type thumbBar struct {
 	hook     uintptr // the message hook, watching the window's thread
 	cb       uintptr // what the hook calls, so Windows keeps it alive
 	hooked   bool
+	word     ui.Color   // the color of the title bar's words, which the icons are
 	instance uintptr    // ITaskbarList3
 	created  uint32     // the message Explorer sends once it made the button
 	icons    [4]uintptr // 上一首, 播放, 暂停, 下一首
@@ -216,14 +216,20 @@ func (t *thumbBar) playIcon() uintptr {
 	return t.icons[1]
 }
 
-// update shows the player's state on the buttons, when it changed.
-func (t *thumbBar) update(playing, has bool) {
-	if t.known && playing == t.playing && has == t.has {
+// update shows the player's state on the buttons, and the color of the title
+// bar's words on them, drawing them again when either changed.
+func (t *thumbBar) update(playing, has bool, word ui.Color) {
+	state := t.known && playing == t.playing && has == t.has
+	color := word == t.word
+	if state && color {
 		return
 	}
-	t.known, t.playing, t.has = true, playing, has
+	t.known, t.playing, t.has, t.word = true, playing, has, word
 	t.ensure()
 	if t.built {
+		if !color {
+			t.build()
+		}
 		t.push()
 	}
 }
@@ -248,8 +254,8 @@ func (t *thumbBar) push() {
 	comCallFull(t.instance, tbThumbBarUpdateButtons, t.hwnd, 3, uintptr(unsafe.Pointer(&buttons[0])))
 }
 
-// build makes the icons, in the color the taskbar shows: white words on a
-// dark taskbar, dark on a light one.
+// build makes the icons in the color of the title bar's words, drawing them
+// over again when the listener changes it.
 func (t *thumbBar) build() {
 	for _, icon := range t.icons {
 		if icon != 0 {
@@ -257,14 +263,10 @@ func (t *thumbBar) build() {
 		}
 	}
 	t.icons = [4]uintptr{}
-	word := byte(0xff)
-	if lightTaskbar() {
-		word = 0x20
-	}
-	t.icons[0] = iconOf(drawPrev, word)
-	t.icons[1] = iconOf(drawPlay, word)
-	t.icons[2] = iconOf(drawPause, word)
-	t.icons[3] = iconOf(drawNext, word)
+	t.icons[0] = iconOf(drawPrev, t.word)
+	t.icons[1] = iconOf(drawPlay, t.word)
+	t.icons[2] = iconOf(drawPause, t.word)
+	t.icons[3] = iconOf(drawNext, t.word)
 }
 
 // guid is Windows' GUID: its first three groups as numbers, which Windows
@@ -341,32 +343,24 @@ func utf16Of(s string) []uint16 {
 	return out
 }
 
-// lightTaskbar reports whether the taskbar is drawn light, as Windows'
-// personalization says apps are.
-func lightTaskbar() bool {
-	const hkeyCurrentUser, rrfRtRegDword = 0x80000001, 0x10
-	key, _ := syscall.UTF16PtrFromString("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize")
-	value, _ := syscall.UTF16PtrFromString("AppsUseLightTheme")
-	var v, size uint32 = 0, 4
-	hr, _, _ := procRegGetValueW.Call(hkeyCurrentUser, uintptr(unsafe.Pointer(key)), uintptr(unsafe.Pointer(value)),
-		rrfRtRegDword, 0, uintptr(unsafe.Pointer(&v)), uintptr(unsafe.Pointer(&size)))
-	return !failedHR(hr) && v != 0
-}
-
-// The glyphs of the buttons, in a box of their own: a triangle for play,
-// bars for pause, a bar beside a triangle for the ones that move.
+// The glyphs of the buttons, in a box of their own: a triangle for play, two
+// bars for pause, a bar beside a triangle for the ones that move. Play is the
+// wider shape and pause the squarer one, so the middle button says which it is
+// at a glance.
 var (
-	drawPlay  = func(x, y float32) bool { return inTriangle(x, y, 0.30, 0.18, 0.30, 0.82, 0.80, 0.50) }
+	drawPlay = func(x, y float32) bool {
+		return inTriangle(x, y, 0.26, 0.12, 0.26, 0.88, 0.86, 0.50)
+	}
 	drawPause = func(x, y float32) bool {
-		return inBar(x, y, 0.30, 0.42, 0.20, 0.80) || inBar(x, y, 0.58, 0.70, 0.20, 0.80)
+		return inBar(x, y, 0.24, 0.44, 0.12, 0.88) || inBar(x, y, 0.56, 0.76, 0.12, 0.88)
 	}
 	drawPrev = func(x, y float32) bool {
-		return inBar(x, y, 0.24, 0.34, 0.20, 0.80) ||
-			inTriangle(x, y, 0.74, 0.20, 0.74, 0.80, 0.38, 0.50)
+		return inBar(x, y, 0.20, 0.32, 0.14, 0.86) ||
+			inTriangle(x, y, 0.80, 0.14, 0.80, 0.86, 0.36, 0.50)
 	}
 	drawNext = func(x, y float32) bool {
-		return inBar(x, y, 0.66, 0.76, 0.20, 0.80) ||
-			inTriangle(x, y, 0.26, 0.20, 0.26, 0.80, 0.62, 0.50)
+		return inBar(x, y, 0.68, 0.80, 0.14, 0.86) ||
+			inTriangle(x, y, 0.20, 0.14, 0.20, 0.86, 0.64, 0.50)
 	}
 )
 
@@ -385,8 +379,8 @@ func inTriangle(x, y, ax, ay, bx, by, cx, cy float32) bool {
 }
 
 // iconOf draws glyph at 32 pixels, smoothed by four samples a side, and makes
-// it an icon of word's shade.
-func iconOf(glyph func(x, y float32) bool, word byte) uintptr {
+// it an icon of color, which its coverage and the color's own alpha show.
+func iconOf(glyph func(x, y float32) bool, color ui.Color) uintptr {
 	const size, samples = 32, 4
 	alpha := make([]byte, size*size)
 	for y := 0; y < size; y++ {
@@ -402,7 +396,7 @@ func iconOf(glyph func(x, y float32) bool, word byte) uintptr {
 			alpha[y*size+x] = byte(255 * hit / (samples * samples))
 		}
 	}
-	data := icoBytes(alpha, size, word)
+	data := icoBytes(alpha, size, color)
 	icon, _, _ := procCreateIconFromRes.Call(uintptr(unsafe.Pointer(&data[0])), uintptr(len(data)), 1,
 		0x00030000, size, size, 0)
 	return icon
@@ -411,7 +405,7 @@ func iconOf(glyph func(x, y float32) bool, word byte) uintptr {
 // icoBytes is an icon's image of one size, its pixels in 32 bits and its mask
 // in one bit, as the shell reads them: the header first, without the icon
 // directory a .ico file puts around it, which this call does not take.
-func icoBytes(alpha []byte, size int, word byte) []byte {
+func icoBytes(alpha []byte, size int, color ui.Color) []byte {
 	const bitmapInfo = 40
 	pixels := size * size * 4
 	maskRow := ((size + 31) / 32) * 4
@@ -423,14 +417,19 @@ func icoBytes(alpha []byte, size int, word byte) []byte {
 	binary.LittleEndian.PutUint16(h[12:], 1)
 	binary.LittleEndian.PutUint16(h[14:], 32)
 	binary.LittleEndian.PutUint32(h[20:], uint32(pixels+mask))
-	// The pixels, bottom row first, and the mask, one where nothing shows.
+	// The pixels, bottom row first, the color over the glyph's coverage and
+	// kept to what an icon takes: straight over its alpha, which premultiplies
+	// it.
 	pix := h[bitmapInfo:]
 	for y := 0; y < size; y++ {
 		src := (size - 1 - y) * size
 		for x := 0; x < size; x++ {
-			a := alpha[src+x]
+			a := uint32(alpha[src+x]) * uint32(color.A) / 255
 			i := (y*size + x) * 4
-			pix[i], pix[i+1], pix[i+2], pix[i+3] = word, word, word, a
+			pix[i] = byte(uint32(color.B) * a / 255)
+			pix[i+1] = byte(uint32(color.G) * a / 255)
+			pix[i+2] = byte(uint32(color.R) * a / 255)
+			pix[i+3] = byte(a)
 		}
 	}
 	m := h[bitmapInfo+pixels:]
