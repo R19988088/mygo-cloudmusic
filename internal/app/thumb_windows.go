@@ -21,10 +21,12 @@ const (
 	thbnClicked  = 0x1800
 	thbfEnabled  = 0x0000
 	thbfDisabled = 0x0001
+
 	// THUMBBUTTONMASK: which of a button's parts the call sets.
-	thbIcon  = 0x1
-	thbTip   = 0x2
-	thbFlags = 0x4
+	thbBitmap = 0x1
+	thbIcon   = 0x2
+	thbTip    = 0x4
+	thbFlags  = 0x8
 
 	whCallWndProc = 4 // WH_CALLWNDPROC
 
