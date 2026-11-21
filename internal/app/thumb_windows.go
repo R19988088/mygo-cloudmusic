@@ -4,6 +4,9 @@ package app
 
 import (
 	"encoding/binary"
+	"fmt"
+	"os"
+	"path/filepath"
 	"syscall"
 	"time"
 	"unsafe"
@@ -49,15 +52,16 @@ var (
 	ole32    = syscall.NewLazyDLL("ole32.dll")
 	advapi32 = syscall.NewLazyDLL("advapi32.dll")
 
-	procCoInitializeEx        = ole32.NewProc("CoInitializeEx")
-	procCoCreateInstance      = ole32.NewProc("CoCreateInstance")
-	procRegGetValueW          = advapi32.NewProc("RegGetValueW")
-	procSetWindowsHookExW     = user32.NewProc("SetWindowsHookExW")
-	procCallNextHookEx        = user32.NewProc("CallNextHookEx")
-	procGetCurrentThreadID    = kernel32.NewProc("GetCurrentThreadId")
-	procCreateIconFromRes     = user32.NewProc("CreateIconFromResourceEx")
-	procDestroyIconThumb      = user32.NewProc("DestroyIcon")
-	procRegisterWindowMessage = user32.NewProc("RegisterWindowMessageW")
+	procCoInitializeEx           = ole32.NewProc("CoInitializeEx")
+	procCoCreateInstance         = ole32.NewProc("CoCreateInstance")
+	procRegGetValueW             = advapi32.NewProc("RegGetValueW")
+	procSetWindowsHookExW        = user32.NewProc("SetWindowsHookExW")
+	procCallNextHookEx           = user32.NewProc("CallNextHookEx")
+	procGetCurrentThreadID       = kernel32.NewProc("GetCurrentThreadId")
+	procGetWindowThreadProcessID = user32.NewProc("GetWindowThreadProcessId")
+	procCreateIconFromRes        = user32.NewProc("CreateIconFromResourceEx")
+	procDestroyIconThumb         = user32.NewProc("DestroyIcon")
+	procRegisterWindowMessage    = user32.NewProc("RegisterWindowMessageW")
 )
 
 // cwpMsg is CWPSTRUCT: the message a window procedure is about to get, as
@@ -123,7 +127,11 @@ func (t *thumbBar) ensure() {
 	if t.hooked {
 		return
 	}
-	tid, _, _ := procGetCurrentThreadID.Call()
+	// The window's own thread, which is the one running the loop that hands the
+	// clicks to it: a goroutine is not tied to one, so asking this one would
+	// watch a thread the window is never seen on.
+	var pid uint32
+	tid, _, _ := procGetWindowThreadProcessID.Call(t.hwnd, uintptr(unsafe.Pointer(&pid)))
 	hook, _, _ := procSetWindowsHookExW.Call(whCallWndProc, t.cb, 0, tid)
 	if hook == 0 {
 		return
@@ -133,24 +141,42 @@ func (t *thumbBar) ensure() {
 }
 
 // proc sees the messages of the window before its procedure does: the clicks
-// of the buttons, and the button Explorer makes again when it starts.
+// of the buttons, and the button Explorer makes again when it starts. The
+// clicks count for any window of the thread: Explorer sends them to the one it
+// took the buttons onto, which is not always the one this started with.
 func (t *thumbBar) proc(code, wparam, lparam uintptr) uintptr {
 	if int32(uint32(code)) >= 0 && lparam != 0 {
-		if m := (*cwpMsg)(ptrOf(lparam)); m.hwnd == t.hwnd {
-			switch {
-			case m.message == wmCommand && uint32(m.wparam>>16) == thbnClicked:
-				if t.a != nil {
-					t.a.click(m.wparam & 0xffff)
-				}
-			case t.created != 0 && m.message == t.created:
-				// A taskbar button to put them on: the first one, or the one
-				// Explorer made again as it restarted.
-				t.add()
+		m := (*cwpMsg)(ptrOf(lparam))
+		switch {
+		case m.message == wmCommand && uint32(m.wparam>>16) == thbnClicked:
+			diag("click", m.hwnd, m.message, m.wparam)
+			if t.a != nil {
+				t.a.click(m.wparam & 0xffff)
 			}
+		case t.created != 0 && m.message == t.created:
+			diag("created", m.hwnd, m.message, m.wparam)
+			// A taskbar button to put them on: the first one, or the one
+			// Explorer made again as it restarted.
+			t.add()
+		case m.message == wmCommand:
+			diag("command", m.hwnd, m.message, m.wparam)
 		}
 	}
 	r, _, _ := procCallNextHookEx.Call(0, code, wparam, lparam)
 	return r
+}
+
+// diag writes what the hook sees to a file beside the app's temporary files,
+// while the taskbar buttons are being brought to life: a click that arrives
+// anywhere but where this looked is the thing to know.
+func diag(what string, hwnd uintptr, message uint32, wparam uintptr) {
+	f, err := os.OpenFile(filepath.Join(os.TempDir(), "mygo-thumb.log"),
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	fmt.Fprintf(f, "%s hwnd=%d msg=%d wparam=%d hi=%d id=%d\n", what, hwnd, message, wparam, wparam>>16, wparam&0xffff)
 }
 
 // click plays, pauses, or moves the player as the button clicked says.
