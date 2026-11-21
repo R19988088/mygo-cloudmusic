@@ -408,25 +408,15 @@ func iconOf(glyph func(x, y float32) bool, word byte) uintptr {
 	return icon
 }
 
-// icoBytes is an icon of one size, its pixels in 32 bits and its mask in one
-// bit, as the shell reads them.
+// icoBytes is an icon's image of one size, its pixels in 32 bits and its mask
+// in one bit, as the shell reads them: the header first, without the icon
+// directory a .ico file puts around it, which this call does not take.
 func icoBytes(alpha []byte, size int, word byte) []byte {
-	const header = 6 + 16
 	const bitmapInfo = 40
 	pixels := size * size * 4
 	maskRow := ((size + 31) / 32) * 4
 	mask := maskRow * size
-	image := bitmapInfo + pixels + mask
-	out := make([]byte, header+image)
-	// ICONDIR: one icon, of pixels with an alpha.
-	out[2], out[4] = 1, 1
-	dir := out[6:]
-	dir[0], dir[1] = byte(size), byte(size)
-	binary.LittleEndian.PutUint16(dir[4:], 1)  // planes
-	binary.LittleEndian.PutUint16(dir[6:], 32) // bits a pixel
-	binary.LittleEndian.PutUint32(dir[8:], uint32(image))
-	binary.LittleEndian.PutUint32(dir[12:], header)
-	h := out[header:]
+	h := make([]byte, bitmapInfo+pixels+mask)
 	binary.LittleEndian.PutUint32(h[0:], bitmapInfo)
 	binary.LittleEndian.PutUint32(h[4:], uint32(size))
 	binary.LittleEndian.PutUint32(h[8:], uint32(size*2)) // the mask under it
@@ -453,5 +443,5 @@ func icoBytes(alpha []byte, size int, word byte) []byte {
 			}
 		}
 	}
-	return out
+	return h
 }
