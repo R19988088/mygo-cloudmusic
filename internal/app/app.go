@@ -57,6 +57,9 @@ type app struct {
 	art   *artCache
 	pl    *player.Player
 	pal   palette
+	// border is the color the window's outline was last given, as Windows keeps
+	// one (0x00bbggrr), so it is set again only when the colors change.
+	border uint32
 	// The colors the settings window shows in its wells: the listener's, or
 	// the appearance's while they chose none.
 	wells colorWells

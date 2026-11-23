@@ -41,6 +41,9 @@ func (a *app) view(c *ui.Context) {
 	if a.thumb != nil {
 		a.thumb.update(a.pl.Playing(), len(a.pl.Queue()) > 0)
 	}
+	// The window's outline carries the first level's color, as the title bar's
+	// words its text.
+	a.outlineWindow()
 
 	if c.Vibrancy() {
 		c.Root().Background(ui.Transparent)
