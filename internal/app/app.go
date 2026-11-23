@@ -260,9 +260,14 @@ func Run() error {
 			// Inset from the corner, within the sidebar, as macOS 26's
 			// apps with a sidebar place them.
 			TrafficLightPosition: &mygo.Point{X: 20, Y: 20},
-			Vibrancy:             mygo.VibrancySidebar,
-			BackgroundColor:      "light-dark(#ffffff, #141416)",
-			Content:              ui.View(a.view),
+			// No vibrancy: the sidebar paints its own color, so the material
+			// behind it had nothing to show, while a window that the compositor
+			// draws directly has no redirection surface — Windows cannot take
+			// the picture its taskbar preview shows, and the player's buttons
+			// there, painted on that picture, took no clicks.
+			Vibrancy:        "",
+			BackgroundColor: "light-dark(#ffffff, #141416)",
+			Content:         ui.View(a.view),
 		})
 		a.setMenu()
 		// How big it was left, kept a moment after it stops changing: the
