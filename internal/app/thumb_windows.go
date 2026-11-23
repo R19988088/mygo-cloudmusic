@@ -33,6 +33,7 @@ const (
 	thbFlags  = 0x8
 
 	whCallWndProc = 4 // WH_CALLWNDPROC
+	whGetMessage  = 3 // WH_GETMESSAGE
 
 	wmLButtonDown   = 0x0201
 	wmNcLButtonDown = 0x00A1
@@ -97,6 +98,19 @@ type cwpMsg struct {
 	hwnd    uintptr
 }
 
+// thumbMsg is MSG, a message taken off a thread's queue, as a WH_GETMESSAGE
+// hook sees it.
+type thumbMsg struct {
+	hwnd    uintptr
+	message uint32
+	_       uint32
+	wparam  uintptr
+	lparam  uintptr
+	time    uint32
+	x       int32
+	y       int32
+}
+
 // thumbButtonInfo is THUMBBUTTON: a button of the thumbnail toolbar.
 type thumbButtonInfo struct {
 	mask   uint32
@@ -114,6 +128,7 @@ type thumbBar struct {
 	hwnd     uintptr
 	hook     uintptr // the message hook, watching the window's thread
 	cb       uintptr // what the hook calls, so Windows keeps it alive
+	cb2      uintptr // the queue hook's, likewise
 	hooked   bool
 	threads  map[uint32]bool // the threads of this process already watched
 	threadAt time.Time       // when the threads were last listed
@@ -127,6 +142,10 @@ type thumbBar struct {
 	playing  bool
 	has      bool
 	known    bool
+	// The click last acted on, and when: the two hooks can both see a click
+	// that is posted and then dispatched, and it counts once.
+	lastClick uintptr
+	lastAt    time.Time
 }
 
 // startThumbBar puts the playback controls on the window's taskbar preview.
@@ -143,6 +162,7 @@ func startThumbBar(a *app) *thumbBar {
 	at, _, _ := procRegisterWindowMessage.Call(uintptr(unsafe.Pointer(name)))
 	t.created = uint32(at)
 	t.cb = syscall.NewCallback(t.proc)
+	t.cb2 = syscall.NewCallback(t.procQueue)
 	// The hooks go on now, while the window is still hidden: Explorer tells it
 	// about the taskbar button it makes as it is shown, and the buttons have to
 	// be put on again after that — it forgets the ones from before.
@@ -204,6 +224,9 @@ func (t *thumbBar) hookThread(tid uint32) {
 	if hook == 0 {
 		return
 	}
+	// The queue as well: a message posted to the thread, and never dispatched
+	// — taken out and dropped — would never reach the window procedure's hook.
+	procSetWindowsHookExW.Call(whGetMessage, t.cb2, 0, uintptr(tid))
 	diag("hook", t.hwnd, tid, 0)
 	t.threads[tid] = true
 	if !t.hooked {
@@ -221,15 +244,11 @@ func (t *thumbBar) proc(code, wparam, lparam uintptr) uintptr {
 		switch {
 		case m.message == wmCommand && uint32(m.wparam>>16) == thbnClicked:
 			diag("click", m.hwnd, m.message, m.wparam)
-			if t.a != nil {
-				t.a.click(m.wparam & 0xffff)
-			}
+			t.press(m.wparam & 0xffff)
 		case uint32(m.wparam>>16) == thbnClicked:
 			// Whatever message Explorer chose: the mark of a button pressed.
 			diag("any", m.hwnd, m.message, m.wparam)
-			if t.a != nil {
-				t.a.click(m.wparam & 0xffff)
-			}
+			t.press(m.wparam & 0xffff)
 		case t.created != 0 && m.message == t.created:
 			diag("created", m.hwnd, m.message, m.wparam)
 			// A taskbar button to put them on: the first one, or the one
@@ -240,6 +259,27 @@ func (t *thumbBar) proc(code, wparam, lparam uintptr) uintptr {
 		case m.hwnd == t.hwnd && (m.message == wmLButtonDown || m.message == wmNcLButtonDown || m.message == wmActivate):
 			// Whether the taskbar preview's clicks reach this window at all.
 			diag("mouse", m.hwnd, m.message, m.wparam)
+		}
+	}
+	r, _, _ := procCallNextHookEx.Call(0, code, wparam, lparam)
+	return r
+}
+
+// procQueue sees the messages of the thread's queue as it takes them out, even
+// the ones no window procedure will run for, and takes the clicks of the buttons
+// from there too: the same mark of a button pressed, whatever carries it.
+func (t *thumbBar) procQueue(code, wparam, lparam uintptr) uintptr {
+	if int32(uint32(code)) >= 0 && lparam != 0 {
+		m := (*thumbMsg)(ptrOf(lparam))
+		switch {
+		case m.message == wmCommand || uint32(m.wparam>>16) == thbnClicked:
+			diag("queue", m.hwnd, m.message, m.wparam)
+			if uint32(m.wparam>>16) == thbnClicked {
+				t.press(m.wparam & 0xffff)
+			}
+		case t.created != 0 && m.message == t.created:
+			diag("queue-created", m.hwnd, m.message, m.wparam)
+			t.add()
 		}
 	}
 	r, _, _ := procCallNextHookEx.Call(0, code, wparam, lparam)
@@ -257,6 +297,18 @@ func diag(what string, hwnd uintptr, message uint32, wparam uintptr) {
 	}
 	defer f.Close()
 	fmt.Fprintf(f, "%s hwnd=%d msg=%d wparam=%d hi=%d id=%d\n", what, hwnd, message, wparam, wparam>>16, wparam&0xffff)
+}
+
+// press acts on a button pressed once, whichever hook saw it first.
+func (t *thumbBar) press(id uintptr) {
+	if t.a == nil {
+		return
+	}
+	if id == t.lastClick && time.Since(t.lastAt) < 200*time.Millisecond {
+		return
+	}
+	t.lastClick, t.lastAt = id, time.Now()
+	t.a.click(id)
 }
 
 // click plays, pauses, or moves the player as the button clicked says.
