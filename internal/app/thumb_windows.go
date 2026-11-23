@@ -34,9 +34,17 @@ const (
 
 	whCallWndProc = 4 // WH_CALLWNDPROC
 
+	wmLButtonDown   = 0x0201
+	wmNcLButtonDown = 0x00A1
+	wmActivate      = 0x0006
+
 	// themeCheck is how often the title bar's color is read again, which
 	// changes when the listener changes Windows' theme.
 	themeCheck = 2 * time.Second
+
+	// threadCheck is how often the process's threads are listed again, to watch
+	// the ones the runtime makes later.
+	threadCheck = 1500 * time.Millisecond
 
 	thumbPrev = 1
 	thumbPlay = 2
@@ -62,7 +70,23 @@ var (
 	procCreateIconFromRes        = user32.NewProc("CreateIconFromResourceEx")
 	procDestroyIconThumb         = user32.NewProc("DestroyIcon")
 	procRegisterWindowMessage    = user32.NewProc("RegisterWindowMessageW")
+
+	procCreateToolhelp32Snapshot = kernel32.NewProc("CreateToolhelp32Snapshot")
+	procThread32First            = kernel32.NewProc("Thread32First")
+	procThread32Next             = kernel32.NewProc("Thread32Next")
+	procCloseHandle              = kernel32.NewProc("CloseHandle")
 )
+
+// threadEntry is THREADENTRY32, one thread of the process the snapshot found.
+type threadEntry struct {
+	size     uint32
+	usage    uint32
+	id       uint32
+	owner    uint32
+	basePri  int32
+	deltaPri int32
+	flags    uint32
+}
 
 // cwpMsg is CWPSTRUCT: the message a window procedure is about to get, as
 // the hook sees it.
@@ -91,6 +115,9 @@ type thumbBar struct {
 	hook     uintptr // the message hook, watching the window's thread
 	cb       uintptr // what the hook calls, so Windows keeps it alive
 	hooked   bool
+	threads  map[uint32]bool // the threads of this process already watched
+	threadAt time.Time       // when the threads were last listed
+	added    bool
 	word     ui.Color   // the color of the title bar's words, which the icons are
 	themedAt time.Time  // when word was last read from Windows
 	instance uintptr    // ITaskbarList3
@@ -116,28 +143,72 @@ func startThumbBar(a *app) *thumbBar {
 	at, _, _ := procRegisterWindowMessage.Call(uintptr(unsafe.Pointer(name)))
 	t.created = uint32(at)
 	t.cb = syscall.NewCallback(t.proc)
-	// The hook goes on as the view builds, not here: it watches the thread that
-	// shows the window, which is the one making the first frame.
+	// The hooks go on now, while the window is still hidden: Explorer tells it
+	// about the taskbar button it makes as it is shown, and the buttons have to
+	// be put on again after that — it forgets the ones from before.
+	t.hookThreads()
 	return t
 }
 
-// ensure watches the window's thread, once, and puts the buttons on the
+// ensure watches every thread this process runs, and puts the buttons on the
 // taskbar button; a restart of Explorer takes them away, which add() puts back.
 func (t *thumbBar) ensure() {
-	if t.hooked {
+	if t.hooked && time.Since(t.threadAt) < threadCheck {
 		return
 	}
-	// The window's own thread, which is the one running the loop that hands the
-	// clicks to it: a goroutine is not tied to one, so asking this one would
-	// watch a thread the window is never seen on.
+	t.hookThreads()
+	if !t.added && t.hooked {
+		t.add()
+	}
+}
+
+// hookThreads watches all the threads of this process. A window's messages are
+// handed to the thread that owns it, and a goroutine is not tied to one: the
+// runtime may move the code that made the window, while the loop that reads
+// its messages stays on the thread Windows made it on. Watching every thread
+// is the only way to be sure the clicks are seen, whichever one they come to,
+// and threads made later are picked up on the next pass.
+func (t *thumbBar) hookThreads() {
+	t.threadAt = time.Now()
+	if t.threads == nil {
+		t.threads = map[uint32]bool{}
+	}
 	var pid uint32
-	tid, _, _ := procGetWindowThreadProcessID.Call(t.hwnd, uintptr(unsafe.Pointer(&pid)))
-	hook, _, _ := procSetWindowsHookExW.Call(whCallWndProc, t.cb, 0, tid)
+	if tid, _, _ := procGetWindowThreadProcessID.Call(t.hwnd, uintptr(unsafe.Pointer(&pid))); tid != 0 {
+		t.hookThread(uint32(tid))
+	}
+	if pid == 0 {
+		return
+	}
+	// TH32CS_SNAPTHREAD: the threads of the whole machine, filtered by process.
+	snap, _, _ := procCreateToolhelp32Snapshot.Call(0x4, uintptr(pid))
+	if snap == 0 || snap == uintptr(0xffffffff) {
+		return
+	}
+	defer procCloseHandle.Call(snap)
+	var e threadEntry
+	e.size = uint32(unsafe.Sizeof(e))
+	for ok, _, _ := procThread32First.Call(snap, uintptr(unsafe.Pointer(&e))); ok != 0; ok, _, _ = procThread32Next.Call(snap, uintptr(unsafe.Pointer(&e))) {
+		if e.owner == pid {
+			t.hookThread(e.id)
+		}
+	}
+}
+
+// hookThread watches one thread, once.
+func (t *thumbBar) hookThread(tid uint32) {
+	if tid == 0 || t.threads[tid] {
+		return
+	}
+	hook, _, _ := procSetWindowsHookExW.Call(whCallWndProc, t.cb, 0, uintptr(tid))
 	if hook == 0 {
 		return
 	}
-	t.hook, t.hooked = hook, true
-	t.add()
+	diag("hook", t.hwnd, tid, 0)
+	t.threads[tid] = true
+	if !t.hooked {
+		t.hook, t.hooked = hook, true
+	}
 }
 
 // proc sees the messages of the window before its procedure does: the clicks
@@ -153,6 +224,12 @@ func (t *thumbBar) proc(code, wparam, lparam uintptr) uintptr {
 			if t.a != nil {
 				t.a.click(m.wparam & 0xffff)
 			}
+		case uint32(m.wparam>>16) == thbnClicked:
+			// Whatever message Explorer chose: the mark of a button pressed.
+			diag("any", m.hwnd, m.message, m.wparam)
+			if t.a != nil {
+				t.a.click(m.wparam & 0xffff)
+			}
 		case t.created != 0 && m.message == t.created:
 			diag("created", m.hwnd, m.message, m.wparam)
 			// A taskbar button to put them on: the first one, or the one
@@ -160,6 +237,9 @@ func (t *thumbBar) proc(code, wparam, lparam uintptr) uintptr {
 			t.add()
 		case m.message == wmCommand:
 			diag("command", m.hwnd, m.message, m.wparam)
+		case m.hwnd == t.hwnd && (m.message == wmLButtonDown || m.message == wmNcLButtonDown || m.message == wmActivate):
+			// Whether the taskbar preview's clicks reach this window at all.
+			diag("mouse", m.hwnd, m.message, m.wparam)
 		}
 	}
 	r, _, _ := procCallNextHookEx.Call(0, code, wparam, lparam)
@@ -234,6 +314,8 @@ func (t *thumbBar) add() {
 	set(2, thumbNext, t.icons[3], "下一首")
 	hr := comCallFull(tl, tbThumbBarAddButtons, t.hwnd, 3, uintptr(unsafe.Pointer(&buttons[0])))
 	t.built = !failedHR(hr)
+	t.added = true
+	diag("add", t.hwnd, 3, uintptr(hr))
 	if t.built && t.known {
 		// What the buttons were built with is what they show.
 		t.push()
