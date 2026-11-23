@@ -3,15 +3,10 @@
 package app
 
 import (
-	"encoding/binary"
-	"fmt"
-	"os"
-	"path/filepath"
 	"syscall"
 	"time"
 	"unsafe"
 
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -55,11 +50,25 @@ const (
 	tbHrInit                = 3
 	tbThumbBarAddButtons    = 15
 	tbThumbBarUpdateButtons = 16
+	tbThumbBarSetImageList  = 17
+	tbSetThumbnailTooltip   = 19
+
+	// ImageList_Create's flags, images of 32 bits a pixel with their own
+	// alpha.
+	ilcColor32 = 0x0020
+
+	// The pictures of the four buttons in the list, in the order it holds them.
+	imagePrev  = 0
+	imagePlay  = 1
+	imagePause = 2
+	imageNext  = 3
 )
 
 var (
 	ole32    = syscall.NewLazyDLL("ole32.dll")
 	advapi32 = syscall.NewLazyDLL("advapi32.dll")
+	comctl32 = syscall.NewLazyDLL("comctl32.dll")
+	gdi32    = syscall.NewLazyDLL("gdi32.dll")
 
 	procCoInitializeEx           = ole32.NewProc("CoInitializeEx")
 	procCoCreateInstance         = ole32.NewProc("CoCreateInstance")
@@ -68,9 +77,13 @@ var (
 	procCallNextHookEx           = user32.NewProc("CallNextHookEx")
 	procGetCurrentThreadID       = kernel32.NewProc("GetCurrentThreadId")
 	procGetWindowThreadProcessID = user32.NewProc("GetWindowThreadProcessId")
-	procCreateIconFromRes        = user32.NewProc("CreateIconFromResourceEx")
-	procDestroyIconThumb         = user32.NewProc("DestroyIcon")
 	procRegisterWindowMessage    = user32.NewProc("RegisterWindowMessageW")
+
+	procImageListCreate  = comctl32.NewProc("ImageList_Create")
+	procImageListAdd     = comctl32.NewProc("ImageList_Add")
+	procImageListReplace = comctl32.NewProc("ImageList_Replace")
+	procCreateDIBSection = gdi32.NewProc("CreateDIBSection")
+	procDeleteObject     = gdi32.NewProc("DeleteObject")
 
 	procCreateToolhelp32Snapshot = kernel32.NewProc("CreateToolhelp32Snapshot")
 	procThread32First            = kernel32.NewProc("Thread32First")
@@ -133,15 +146,18 @@ type thumbBar struct {
 	threads  map[uint32]bool // the threads of this process already watched
 	threadAt time.Time       // when the threads were last listed
 	added    bool
-	word     ui.Color   // the color of the title bar's words, which the icons are
-	themedAt time.Time  // when word was last read from Windows
-	instance uintptr    // ITaskbarList3
-	created  uint32     // the message Explorer sends once it made the button
-	icons    [4]uintptr // 上一首, 播放, 暂停, 下一首
-	built    bool
-	playing  bool
-	has      bool
-	known    bool
+	word     ui.Color  // the color of the title bar's words, which the icons are
+	themedAt time.Time // when word was last read from Windows
+	instance uintptr   // ITaskbarList3
+	created  uint32    // the message Explorer sends once it made the button
+	// il is the image list the buttons take their pictures from, which
+	// Explorer draws from; a picture it keeps by name, so a button is given
+	// another one by name rather than by handle.
+	il      uintptr
+	built   bool
+	playing bool
+	has     bool
+	known   bool
 	// The click last acted on, and when: the two hooks can both see a click
 	// that is posted and then dispatched, and it counts once.
 	lastClick uintptr
@@ -227,7 +243,6 @@ func (t *thumbBar) hookThread(tid uint32) {
 	// The queue as well: a message posted to the thread, and never dispatched
 	// — taken out and dropped — would never reach the window procedure's hook.
 	procSetWindowsHookExW.Call(whGetMessage, t.cb2, 0, uintptr(tid))
-	diag("hook", t.hwnd, tid, 0)
 	t.threads[tid] = true
 	if !t.hooked {
 		t.hook, t.hooked = hook, true
@@ -243,22 +258,17 @@ func (t *thumbBar) proc(code, wparam, lparam uintptr) uintptr {
 		m := (*cwpMsg)(ptrOf(lparam))
 		switch {
 		case m.message == wmCommand && uint32(m.wparam>>16) == thbnClicked:
-			diag("click", m.hwnd, m.message, m.wparam)
 			t.press(m.wparam & 0xffff)
 		case uint32(m.wparam>>16) == thbnClicked:
 			// Whatever message Explorer chose: the mark of a button pressed.
-			diag("any", m.hwnd, m.message, m.wparam)
 			t.press(m.wparam & 0xffff)
 		case t.created != 0 && m.message == t.created:
-			diag("created", m.hwnd, m.message, m.wparam)
 			// A taskbar button to put them on: the first one, or the one
 			// Explorer made again as it restarted.
 			t.add()
 		case m.message == wmCommand:
-			diag("command", m.hwnd, m.message, m.wparam)
 		case m.hwnd == t.hwnd && (m.message == wmLButtonDown || m.message == wmNcLButtonDown || m.message == wmActivate):
 			// Whether the taskbar preview's clicks reach this window at all.
-			diag("mouse", m.hwnd, m.message, m.wparam)
 		}
 	}
 	r, _, _ := procCallNextHookEx.Call(0, code, wparam, lparam)
@@ -273,30 +283,15 @@ func (t *thumbBar) procQueue(code, wparam, lparam uintptr) uintptr {
 		m := (*thumbMsg)(ptrOf(lparam))
 		switch {
 		case m.message == wmCommand || uint32(m.wparam>>16) == thbnClicked:
-			diag("queue", m.hwnd, m.message, m.wparam)
 			if uint32(m.wparam>>16) == thbnClicked {
 				t.press(m.wparam & 0xffff)
 			}
 		case t.created != 0 && m.message == t.created:
-			diag("queue-created", m.hwnd, m.message, m.wparam)
 			t.add()
 		}
 	}
 	r, _, _ := procCallNextHookEx.Call(0, code, wparam, lparam)
 	return r
-}
-
-// diag writes what the hook sees to a file beside the app's temporary files,
-// while the taskbar buttons are being brought to life: a click that arrives
-// anywhere but where this looked is the thing to know.
-func diag(what string, hwnd uintptr, message uint32, wparam uintptr) {
-	f, err := os.OpenFile(filepath.Join(os.TempDir(), "mygo-thumb.log"),
-		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	fmt.Fprintf(f, "%s hwnd=%d msg=%d wparam=%d hi=%d id=%d\n", what, hwnd, message, wparam, wparam>>16, wparam&0xffff)
 }
 
 // press acts on a button pressed once, whichever hook saw it first.
@@ -311,9 +306,11 @@ func (t *thumbBar) press(id uintptr) {
 	t.a.click(id)
 }
 
-// click plays, pauses, or moves the player as the button clicked says.
+// click plays, pauses, or moves the player as the button clicked says, and
+// draws the main window's bar again with it: a press on the taskbar's preview
+// is no press the window itself hears, so nothing else would.
 func (a *app) click(id uintptr) {
-	mygo.RunOnMain(func() {
+	a.post(func() {
 		switch id {
 		case thumbPrev:
 			a.pl.Prev()
@@ -322,6 +319,17 @@ func (a *app) click(id uintptr) {
 		case thumbNext:
 			a.pl.Next()
 		}
+		if a.thumb == nil {
+			return
+		}
+		// The middle button's picture follows at once, as the button that was
+		// pressed is still drawn.
+		playing := a.pl.Playing()
+		if playing == a.thumb.playing {
+			return
+		}
+		a.thumb.playing = playing
+		a.thumb.push()
 	})
 }
 
@@ -351,35 +359,40 @@ func (t *thumbBar) add() {
 	if tl == 0 {
 		return
 	}
-	t.build()
-	var buttons [3]thumbButtonInfo
-	set := func(i int, id uint32, icon uintptr, tip string) {
-		b := &buttons[i]
-		b.mask = thbIcon | thbTip | thbFlags
-		b.id = id
-		b.icon = icon
-		copy(b.tip[:], utf16Of(tip))
-		b.flags = thbfEnabled
+	if t.word.A == 0 {
+		// The color the icons are drawn in is read before they are, which
+		// happens before a frame shows the player's state.
+		t.word = t.words()
 	}
-	set(0, thumbPrev, t.icons[0], "上一首")
-	set(1, thumbPlay, t.playIcon(), "播放/暂停")
-	set(2, thumbNext, t.icons[3], "下一首")
+	t.images(tl)
+	var buttons [3]thumbButtonInfo
+	t.button(&buttons[0], thumbPrev, imagePrev, "上一首")
+	t.button(&buttons[1], thumbPlay, t.playImage(), "播放/暂停")
+	t.button(&buttons[2], thumbNext, imageNext, "下一首")
 	hr := comCallFull(tl, tbThumbBarAddButtons, t.hwnd, 3, uintptr(unsafe.Pointer(&buttons[0])))
 	t.built = !failedHR(hr)
 	t.added = true
-	diag("add", t.hwnd, 3, uintptr(hr))
 	if t.built && t.known {
 		// What the buttons were built with is what they show.
 		t.push()
 	}
 }
 
-// playIcon is the icon of the middle button: play, or pause while playing.
-func (t *thumbBar) playIcon() uintptr {
+// button fills b with the picture Explorer draws and the tip it shows.
+func (t *thumbBar) button(b *thumbButtonInfo, id uint32, image int, tip string) {
+	b.mask = thbBitmap | thbTip | thbFlags
+	b.id = id
+	b.bitmap = uint32(image)
+	copy(b.tip[:], utf16Of(tip))
+	b.flags = thbfEnabled
+}
+
+// playImage is the picture of the middle button: play, or pause while playing.
+func (t *thumbBar) playImage() int {
 	if t.playing {
-		return t.icons[2]
+		return imagePause
 	}
-	return t.icons[1]
+	return imagePlay
 }
 
 // update shows the player's state on the buttons, and the color of the title
@@ -393,30 +406,45 @@ func (t *thumbBar) update(playing, has bool) {
 	}
 	word := t.words()
 	colorChanged := word != t.word
+	stateChanged := !t.known || playing != t.playing
 	t.known, t.playing, t.has, t.word = true, playing, has, word
 	t.ensure()
 	if t.built {
-		if colorChanged && t.icons[0] != 0 {
-			t.build()
+		if colorChanged {
+			t.images(t.instance)
+			t.push()
+			return
 		}
-		t.push()
+		if stateChanged {
+			t.push()
+		}
 	}
 }
 
-// push writes the state to the buttons Windows already shows.
+// push writes the state to the buttons Windows already shows. It names their
+// pictures only, as a button whose tips are set once keeps them.
 func (t *thumbBar) push() {
 	var buttons [3]thumbButtonInfo
-	set := func(i int, id uint32, icon uintptr) {
+	place := func(i int, id uint32, image int) {
 		b := &buttons[i]
-		b.mask = thbIcon | thbFlags
+		b.mask = thbBitmap | thbFlags
 		b.id = id
-		b.icon = icon
+		b.bitmap = uint32(image)
 		b.flags = thbfEnabled
 	}
-	set(0, thumbPrev, t.icons[0])
-	set(1, thumbPlay, t.playIcon())
-	set(2, thumbNext, t.icons[3])
+	place(0, thumbPrev, imagePrev)
+	place(1, thumbPlay, t.playImage())
+	place(2, thumbNext, imageNext)
 	comCallFull(t.instance, tbThumbBarUpdateButtons, t.hwnd, 3, uintptr(unsafe.Pointer(&buttons[0])))
+}
+
+// playTip names what the middle button does now, which Explorer shows as its
+// tip and which changes with the state the icon does.
+func (t *thumbBar) playTip() string {
+	if t.playing {
+		return "暂停"
+	}
+	return "播放"
 }
 
 // words is the color of the title bar's words: white on a dark one, near black
@@ -424,9 +452,9 @@ func (t *thumbBar) push() {
 func (t *thumbBar) words() ui.Color {
 	t.themedAt = time.Now()
 	if lightTheme() {
-		return ui.RGBA(0x1a, 0x1a, 0x1a, 1)
+		return ui.RGB(0x1a, 0x1a, 0x1a)
 	}
-	return ui.RGBA(0xff, 0xff, 0xff, 1)
+	return ui.RGB(0xff, 0xff, 0xff)
 }
 
 // lightTheme reports whether Windows draws its taskbar and the preview over a
@@ -441,19 +469,75 @@ func lightTheme() bool {
 	return !failedHR(hr) && v != 0
 }
 
-// build makes the icons in the color of the title bar's words, drawing them
-// over again when the listener changes it.
-func (t *thumbBar) build() {
-	for _, icon := range t.icons {
-		if icon != 0 {
-			procDestroyIconThumb.Call(icon)
+// images draws the four pictures into the image list Explorer gives the
+// buttons their pictures from, and gives it that list once: the buttons name
+// their picture by its place in it, which is what changes when the state does.
+func (t *thumbBar) images(tl uintptr) {
+	glyphs := []func(x, y float32) bool{drawPrev, drawPlay, drawPause, drawNext}
+	if t.il == 0 {
+		il, _, _ := procImageListCreate.Call(32, 32, ilcColor32, uintptr(len(glyphs)), 1)
+		if il == 0 {
+			return
 		}
+		t.il = il
+		for _, glyph := range glyphs {
+			bitmap := glyphBitmap(glyph, t.word, 32)
+			procImageListAdd.Call(t.il, bitmap, 0)
+			procDeleteObject.Call(bitmap)
+		}
+		comCallFull(tl, tbThumbBarSetImageList, t.hwnd, t.il)
+		return
 	}
-	t.icons = [4]uintptr{}
-	t.icons[0] = iconOf(drawPrev, t.word)
-	t.icons[1] = iconOf(drawPlay, t.word)
-	t.icons[2] = iconOf(drawPause, t.word)
-	t.icons[3] = iconOf(drawNext, t.word)
+	// The list is the one Explorer has: its pictures are written over in it,
+	// not handed to it again.
+	for i, glyph := range glyphs {
+		bitmap := glyphBitmap(glyph, t.word, 32)
+		procImageListReplace.Call(t.il, uintptr(i), bitmap, 0)
+		procDeleteObject.Call(bitmap)
+	}
+}
+
+// glyphBitmap draws glyph at size pixels into a bitmap of 32 bits a pixel:
+// its color over its coverage, premultiplied, which is what an image list of
+// ILC_COLOR32 takes.
+func glyphBitmap(glyph func(x, y float32) bool, color ui.Color, size int) uintptr {
+	var h bitmapInfoHeader
+	h.size = 40
+	h.width = int32(size)
+	h.height = -int32(size) // the top row first
+	h.planes = 1
+	h.bitCount = 32
+	var bits unsafe.Pointer
+	bitmap, _, _ := procCreateDIBSection.Call(0, uintptr(unsafe.Pointer(&h)), 0, uintptr(unsafe.Pointer(&bits)), 0, 0)
+	if bitmap == 0 || bits == nil {
+		return 0
+	}
+	coverage := glyphCoverage(glyph, size)
+	pixels := unsafe.Slice((*byte)(bits), size*size*4)
+	for i := 0; i < size*size; i++ {
+		a := uint32(coverage[i]) * uint32(color.A) / 255
+		pixels[i*4] = byte(uint32(color.B) * a / 255)
+		pixels[i*4+1] = byte(uint32(color.G) * a / 255)
+		pixels[i*4+2] = byte(uint32(color.R) * a / 255)
+		pixels[i*4+3] = byte(a)
+	}
+	return bitmap
+}
+
+// bitmapInfoHeader is Windows' BITMAPINFOHEADER, the shape of the pixels a
+// bitmap is made with.
+type bitmapInfoHeader struct {
+	size          uint32
+	width         int32
+	height        int32
+	planes        uint16
+	bitCount      uint16
+	compression   uint32
+	sizeImage     uint32
+	xPelsPerMeter int32
+	yPelsPerMeter int32
+	clrUsed       uint32
+	clrImportant  uint32
 }
 
 // guid is Windows' GUID: its first three groups as numbers, which Windows
@@ -565,17 +649,18 @@ func inTriangle(x, y, ax, ay, bx, by, cx, cy float32) bool {
 	return !(negative && positive)
 }
 
-// iconOf draws glyph at 32 pixels, smoothed by four samples a side, and makes
-// it an icon of color, which its coverage and the color's own alpha show.
-func iconOf(glyph func(x, y float32) bool, color ui.Color) uintptr {
-	const size, samples = 32, 4
+// glyphCoverage is glyph at size pixels, its coverage smoothed by four samples
+// a side: how much of each pixel it fills, 0 to 255.
+func glyphCoverage(glyph func(x, y float32) bool, size int) []byte {
+	const samples = 4
+	side := float32(size)
 	alpha := make([]byte, size*size)
 	for y := 0; y < size; y++ {
 		for x := 0; x < size; x++ {
 			hit := 0
 			for sy := 0; sy < samples; sy++ {
 				for sx := 0; sx < samples; sx++ {
-					if glyph((float32(x)+(float32(sx)+0.5)/samples)/size, (float32(y)+(float32(sy)+0.5)/samples)/size) {
+					if glyph((float32(x)+(float32(sx)+0.5)/samples)/side, (float32(y)+(float32(sy)+0.5)/samples)/side) {
 						hit++
 					}
 				}
@@ -583,51 +668,5 @@ func iconOf(glyph func(x, y float32) bool, color ui.Color) uintptr {
 			alpha[y*size+x] = byte(255 * hit / (samples * samples))
 		}
 	}
-	data := icoBytes(alpha, size, color)
-	icon, _, _ := procCreateIconFromRes.Call(uintptr(unsafe.Pointer(&data[0])), uintptr(len(data)), 1,
-		0x00030000, size, size, 0)
-	return icon
-}
-
-// icoBytes is an icon's image of one size, its pixels in 32 bits and its mask
-// in one bit, as the shell reads them: the header first, without the icon
-// directory a .ico file puts around it, which this call does not take.
-func icoBytes(alpha []byte, size int, color ui.Color) []byte {
-	const bitmapInfo = 40
-	pixels := size * size * 4
-	maskRow := ((size + 31) / 32) * 4
-	mask := maskRow * size
-	h := make([]byte, bitmapInfo+pixels+mask)
-	binary.LittleEndian.PutUint32(h[0:], bitmapInfo)
-	binary.LittleEndian.PutUint32(h[4:], uint32(size))
-	binary.LittleEndian.PutUint32(h[8:], uint32(size*2)) // the mask under it
-	binary.LittleEndian.PutUint16(h[12:], 1)
-	binary.LittleEndian.PutUint16(h[14:], 32)
-	binary.LittleEndian.PutUint32(h[20:], uint32(pixels+mask))
-	// The pixels, bottom row first, the color over the glyph's coverage and
-	// kept to what an icon takes: straight over its alpha, which premultiplies
-	// it.
-	pix := h[bitmapInfo:]
-	for y := 0; y < size; y++ {
-		src := (size - 1 - y) * size
-		for x := 0; x < size; x++ {
-			a := uint32(alpha[src+x]) * uint32(color.A) / 255
-			i := (y*size + x) * 4
-			pix[i] = byte(uint32(color.B) * a / 255)
-			pix[i+1] = byte(uint32(color.G) * a / 255)
-			pix[i+2] = byte(uint32(color.R) * a / 255)
-			pix[i+3] = byte(a)
-		}
-	}
-	m := h[bitmapInfo+pixels:]
-	for y := 0; y < size; y++ {
-		src := (size - 1 - y) * size
-		for x := 0; x < size; x++ {
-			if alpha[src+x] == 0 {
-				row := y*maskRow + x/8
-				m[row] |= 0x80 >> uint(x%8)
-			}
-		}
-	}
-	return h
+	return alpha
 }

@@ -60,6 +60,9 @@ type app struct {
 	// border is the color the window's outline was last given, as Windows keeps
 	// one (0x00bbggrr), so it is set again only when the colors change.
 	border uint32
+	// title is the window's title as last given: the song that plays, so the
+	// taskbar's preview says which it is, or the app's name.
+	title string
 	// The colors the settings window shows in its wells: the listener's, or
 	// the appearance's while they chose none.
 	wells colorWells

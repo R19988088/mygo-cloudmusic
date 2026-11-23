@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 
@@ -26,6 +27,26 @@ const (
 	edgeFeather  = 10
 )
 
+// nameWindow gives the window the name of the song that plays, and the app's
+// own when none does: the taskbar's preview is headed by the title, and a
+// listener opening it looks for the song, not for the app again.
+func (a *app) nameWindow() {
+	title := mygo.App.Name()
+	if song := a.pl.Current(); song != nil && song.Name != "" {
+		title = song.Name
+		if len(song.Artists) > 0 && song.Artists[0].Name != "" {
+			title += " · " + song.Artists[0].Name
+		}
+	}
+	if title == a.title {
+		return
+	}
+	a.title = title
+	if a.win != nil {
+		a.win.SetTitle(title)
+	}
+}
+
 func (a *app) view(c *ui.Context) {
 	t := *c.Theme()
 	a.pal = paletteFor(&t)
@@ -44,6 +65,9 @@ func (a *app) view(c *ui.Context) {
 	// The window's outline carries the first level's color, as the title bar's
 	// words its text.
 	a.outlineWindow()
+	// The taskbar's preview is headed by the window's title, which names the
+	// song while one is up.
+	a.nameWindow()
 
 	if c.Vibrancy() {
 		c.Root().Background(ui.Transparent)
