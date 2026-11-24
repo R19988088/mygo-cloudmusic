@@ -52,6 +52,7 @@ var (
 	iconMore    = fillIcon(`<circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/>`)
 	iconMic     = strokeIcon(`<rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v3"/>`)
 	iconDisc    = strokeIcon(`<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/>`)
+	iconFilm    = strokeIcon(`<rect x="2.5" y="4.5" width="19" height="15" rx="2.5"/><path d="M2.5 9.5h19"/><path d="M2.5 14.5h19"/><path d="M7.5 4.5v15"/><path d="M16.5 4.5v15"/>`)
 )
 
 var (

@@ -147,6 +147,11 @@ func (a *app) open(r route) {
 func (a *app) show(r route) {
 	a.route = r
 	a.trackList, a.pageScroll = ui.ListState{}, ui.ScrollState{}
+	// 综合 shows alone, as 私人 FM does; a kind of what was found shows with
+	// the column beside the categories that lists it.
+	if r.page == pageSearch {
+		a.searchOn, a.mineOn = r.search != searchAll, false
+	}
 	a.noteRoute(r)
 	if r.page == pagePlaylist {
 		a.loadPlaylist(r.playlist, false)
@@ -156,6 +161,9 @@ func (a *app) show(r route) {
 	}
 	if r.page == pagePodcast {
 		a.loadPodcast(r.podcast)
+	}
+	if r.page == pageArtist {
+		a.loadArtist(r.artist)
 	}
 }
 
@@ -273,7 +281,7 @@ func (a *app) navColumn(c *ui.Context) {
 			a.navItem(c, iconRadio, "私人 FM", route{page: pageFM})
 			a.navItem(c, iconCharts, "排行榜", route{page: pageCharts})
 			if a.searched != "" {
-				a.navItem(c, iconSearch, "搜索结果", route{page: pageSearch})
+				a.searchGroup(c)
 			}
 			a.navGroup(c, "我的", &a.mineClosed, func() {
 				a.mineItem(c, iconNote, "歌单", minePlaylists)
@@ -297,7 +305,7 @@ func (a *app) playlistColumn(c *ui.Context) {
 	p := a.pal
 	col := ui.Column(c).Clip().DragWindow()
 	target := float32(0)
-	if a.mineOn && !a.nowPlaying {
+	if (a.mineOn || a.searchOn) && !a.nowPlaying {
 		target = playlistWidth
 	}
 	w := col.AnimateTo("width", target, ui.Animation{Duration: 240 * time.Millisecond})
@@ -330,7 +338,12 @@ func (a *app) playlistColumn(c *ui.Context) {
 		ui.Column(c).Fill().PaddingX(8).Children(func() {
 			ui.Scroll(c.Key("playlists")).TrackScroll(&a.plScroll).Grow(1).Margin(0, -6).
 				Padding(columnsTop(c), 6, playlistFoot, 6).Gap(4).Children(func() {
-				a.mineList(c)
+				switch {
+				case a.searchOn && a.searched != "":
+					a.searchColumn(c)
+				case a.mineOn:
+					a.mineList(c)
+				}
 			})
 		})
 		// And at its edges the list fades, as a page's does under its bar,
@@ -411,6 +424,7 @@ func (a *app) mineItem(c *ui.Context, icon *ui.SVG, label string, kind mineKind)
 // the podcasts, not the FM it was on.
 func (a *app) chooseMine(kind mineKind) {
 	a.mineShown, a.mineOn = kind, true
+	a.searchOn = false
 	if r, ok := a.mineRoute(kind); ok {
 		a.open(r)
 		return
@@ -499,8 +513,8 @@ func (a *app) navItem(c *ui.Context, icon *ui.SVG, label string, r route) {
 	})
 	if b.Clicked() {
 		// A page opened closes the playlists' column, which one of 我的
-		// opened.
-		a.mineOn = false
+		// opened, and the column of what a search found beside it.
+		a.mineOn, a.searchOn = false, false
 		a.open(r)
 	}
 }
@@ -750,6 +764,10 @@ func (a *app) content(c *ui.Context) {
 		a.podcastPage(c)
 	case pagePick:
 		a.pickPage(c)
+	case pageArtist:
+		a.artistPage(c)
+	case pageMV:
+		a.mvPage(c)
 	case pageSearch:
 		a.searchPage(c)
 	case pageFM:
@@ -831,7 +849,14 @@ func firstPlayable(tracks []netease.Track) int {
 
 func (a *app) search(q string) {
 	a.history, a.forward = append(a.history, a.route), nil
-	a.route = route{page: pageSearch}
+	// The kind of what was found that the listener was on stays: searching
+	// again from 歌单 shows the playlists again.
+	kind := searchAll
+	if a.searchOn {
+		kind = a.searchShown
+	}
+	a.route = route{page: pageSearch, search: kind}
+	a.searchOn = kind != searchAll
 	a.mineOn = false
 	a.trackList, a.pageScroll = ui.ListState{}, ui.ScrollState{}
 	a.nowPlaying = false
@@ -840,18 +865,48 @@ func (a *app) search(q string) {
 
 // runSearch loads the results of q, wherever the listener is.
 func (a *app) runSearch(q string) {
-	a.searched, a.searching, a.searchErr, a.results = q, true, "", nil
+	a.searched, a.searching, a.searchErr = q, true, ""
+	a.results = netease.SearchResults{}
 	go func() {
-		res, err := netease.Search(q, 60)
+		res, err := netease.SearchAll(q)
 		a.post(func() {
 			if q != a.searched {
 				return
 			}
 			a.searching = false
-			a.results = res
 			if err != nil {
 				a.searchErr = "搜索失败，请稍后再试"
+				return
 			}
+			a.results = *res
+			a.noteFinds(res)
 		})
 	}()
+}
+
+// noteFinds keeps the artists and MVs found by id, which their pages show.
+func (a *app) noteFinds(res *netease.SearchResults) {
+	a.artistInfo, a.mvInfo = map[int64]*netease.SearchArtist{}, map[int64]*netease.MV{}
+	for i := range res.Artists {
+		a.artistInfo[res.Artists[i].ID] = &res.Artists[i]
+	}
+	for i := range res.MVs {
+		a.mvInfo[res.MVs[i].ID] = &res.MVs[i]
+	}
+}
+
+// closeSearch closes what the search found: the section leaves the sidebar,
+// and the page of the results gives way to the one before it.
+func (a *app) closeSearch() {
+	a.query, a.searched, a.searchErr = "", "", ""
+	a.results = netease.SearchResults{}
+	a.searchOn, a.searchClosed = false, false
+	if a.route.page != pageSearch {
+		return
+	}
+	if len(a.history) > 0 {
+		a.back()
+		return
+	}
+	a.show(route{page: pageHome})
 }

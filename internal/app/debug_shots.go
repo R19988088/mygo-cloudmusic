@@ -160,6 +160,62 @@ func init() {
 				mygo.RunOnMain(mygo.App.Quit)
 				return
 			}
+			if os.Getenv("NM_SCENE") == "search" {
+				// What a search found, and the pages of its kinds beside the
+				// column of what was found, as the sidebar shows them.
+				step(0, func() {
+					a.searched = ""
+					a.search("kikuo")
+				})
+				for range 120 {
+					var ready bool
+					mygo.RunOnMain(func() { ready = !a.searching && a.searched != "" })
+					if ready {
+						break
+					}
+					time.Sleep(250 * time.Millisecond)
+				}
+				time.Sleep(2 * time.Second)
+				shot("search-all", a.win)
+				step(0, func() { a.chooseSearch(searchSongs) })
+				time.Sleep(2 * time.Second)
+				shot("search-songs", a.win)
+				step(0, func() { a.chooseSearch(searchPlaylists) })
+				time.Sleep(2 * time.Second)
+				shot("search-playlists", a.win)
+				step(0, func() { a.chooseSearch(searchAlbums) })
+				time.Sleep(2 * time.Second)
+				shot("search-albums", a.win)
+				step(0, func() { a.chooseSearch(searchArtists) })
+				time.Sleep(2 * time.Second)
+				shot("search-artists", a.win)
+				step(0, func() {
+					if len(a.results.Artists) > 0 {
+						a.open(route{page: pageArtist, artist: a.results.Artists[0].ID})
+					}
+				})
+				for range 80 {
+					var ready bool
+					mygo.RunOnMain(func() {
+						ready = len(a.artistInfo) > 0 && len(a.artistSongs) > 0
+					})
+					if ready {
+						break
+					}
+					time.Sleep(250 * time.Millisecond)
+				}
+				time.Sleep(2 * time.Second)
+				shot("search-artist", a.win)
+				step(0, func() {
+					if len(a.results.MVs) > 0 {
+						a.open(route{page: pageMV, mv: a.results.MVs[0].ID})
+					}
+				})
+				time.Sleep(2 * time.Second)
+				shot("search-mv", a.win)
+				mygo.RunOnMain(mygo.App.Quit)
+				return
+			}
 			if os.Getenv("NM_SCENE") == "pod" {
 				// The podcasts' column chosen from the page of 私人 FM, with
 				// the covers NetEase serves: the third level first says which

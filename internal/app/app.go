@@ -25,6 +25,10 @@ const (
 	// pagePick is the third level of a list of 我的 before anything in it is
 	// chosen: the column beside the categories lists what to choose from.
 	pagePick
+	// pageArtist and pageMV are the pages of a search's finds: an artist and
+	// their songs, and an MV.
+	pageArtist
+	pageMV
 )
 
 type route struct {
@@ -32,6 +36,11 @@ type route struct {
 	playlist int64
 	album    int64
 	podcast  int64
+	artist   int64
+	mv       int64
+	// search is which kind of what a search found pageSearch shows: the
+	// aggregate, searchAll, or one of its kinds.
+	search searchKind
 }
 
 // mineKind is a list of the sidebar's 我的 section, which the column of
@@ -128,10 +137,24 @@ type app struct {
 
 	query     string
 	searched  string
-	results   []netease.Track
+	results   netease.SearchResults
 	searching bool
 	searchErr string
 	searchBox ui.Handle
+	// The 搜索结果 section of the sidebar, as 我的: closed, which of its
+	// kinds the column beside the categories lists, and whether that column
+	// shows — as it does not for 综合, which is a page alone, as 私人 FM is.
+	searchClosed bool
+	searchShown  searchKind
+	searchOn     bool
+	// artistInfo and mvInfo are the artists and MVs a search found, by id,
+	// which their pages show; artistSongs are the songs of an artist's page
+	// as they load.
+	artistInfo  map[int64]*netease.SearchArtist
+	mvInfo      map[int64]*netease.MV
+	artistSongs map[int64][]netease.Track
+	loadingAr   map[int64]bool
+	arErr       map[int64]string
 
 	nowPlaying  bool
 	npOpen      bool      // Now Playing as it last showed: open or not

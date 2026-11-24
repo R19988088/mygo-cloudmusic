@@ -311,30 +311,6 @@ func (a *app) playlistHeader(c *ui.Context, pl *netease.Playlist) {
 	})
 }
 
-func (a *app) searchPage(c *ui.Context) {
-	if len(a.results) == 0 && a.searching {
-		a.trackSkeleton(c, a.pageShimmer(c), true, func(c *ui.Context) {
-			a.heading(c, "“"+a.searched+"”", "搜索")
-		})
-		return
-	}
-	if len(a.results) == 0 {
-		msg := a.searchErr
-		if msg == "" {
-			msg = "没有找到相关歌曲"
-		}
-		top, bottom := a.insets(c)
-		ui.Column(c).Grow(1).Padding(top+pageGap, pagePad, bottom, pagePad).Children(func() {
-			a.heading(c, "“"+a.searched+"”", "搜索")
-			a.centered(c, msg, nil)
-		})
-		return
-	}
-	a.trackRows(c, a.results, true, func(c *ui.Context) {
-		a.heading(c, "“"+a.searched+"”", "搜索")
-	})
-}
-
 // trackRows lists tracks under a header, which scrolls with them; a click
 // plays the list from the track clicked.
 func (a *app) trackRows(c *ui.Context, tracks []netease.Track, covers bool, header func(c *ui.Context)) {
